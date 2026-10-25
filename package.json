@@ -41,6 +41,8 @@
   "files": [
     "dist",
     "README.md",
+    "README.pt-BR.md",
+    "README.es.md",
     "LICENSE"
   ],
   "n8n": {
