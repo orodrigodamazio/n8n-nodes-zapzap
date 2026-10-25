@@ -1,0 +1,84 @@
+{
+  "name": "ZapZap: daily reminder from a schedule",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Sends one reminder every day at 09:00 (n8n server time).\nChange the number, the text and the hour. Use it for internal reminders or for clients who agreed to receive them.",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "every-day",
+      "name": "Every day 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceId": "YOUR_INSTANCE_ID",
+        "number": "5511999999999",
+        "text": "Reminder: check today's schedule."
+      },
+      "id": "send-reminder",
+      "name": "Send reminder",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        240,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every day 09:00": {
+      "main": [
+        [
+          {
+            "node": "Send reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

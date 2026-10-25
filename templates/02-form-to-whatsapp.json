@@ -1,0 +1,80 @@
+{
+  "name": "ZapZap: send a WhatsApp message when a form is submitted",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "POST a JSON body like {\"name\":\"Ana\",\"phone\":\"5511999999999\"} to this workflow's webhook URL (your form tool, Zapier-style, or curl).\nThe lead gets a confirmation on WhatsApp. Only message people who asked to hear from you.",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zapzap-form",
+        "options": {}
+      },
+      "id": "form-webhook",
+      "name": "Form webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "zapzap-form"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceId": "YOUR_INSTANCE_ID",
+        "number": "={{ String($json.body.phone).replace(/\\D/g, '') }}",
+        "text": "=Hi {{ $json.body.name }}! We got your request and will contact you soon."
+      },
+      "id": "send-confirmation",
+      "name": "Send confirmation",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        240,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Form webhook": {
+      "main": [
+        [
+          {
+            "node": "Send confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

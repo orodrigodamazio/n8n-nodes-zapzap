@@ -1,0 +1,142 @@
+{
+  "name": "ZapZap: buttons menu on a keyword",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "When someone sends 'menu', reply with quick-reply buttons and a link button (up to 3 buttons).",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "instanceId": "YOUR_INSTANCE_ID",
+        "events": [
+          "messages"
+        ]
+      },
+      "id": "zapzap-trigger",
+      "name": "ZapZap Trigger",
+      "type": "n8n-nodes-zapzap.zapZapTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      },
+      "webhookId": "zapzap-trigger-hook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-3",
+              "leftValue": "={{ $json.data.message.fromMe }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-4",
+              "leftValue": "={{ $json.data.message.text.trim().toLowerCase() }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "menu"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-menu",
+      "name": "Is menu",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendInteractive",
+        "instanceId": "YOUR_INSTANCE_ID",
+        "number": "={{ $json.data.message.chatid.replace('@s.whatsapp.net', '') }}",
+        "interactiveType": "buttons",
+        "interactiveText": "How can we help?",
+        "buttonsJson": "[{\"text\":\"Talk to sales\",\"id\":\"sales\"},{\"text\":\"Support\",\"id\":\"support\"},{\"text\":\"Our site\",\"url\":\"https://example.com\"}]"
+      },
+      "id": "send-buttons",
+      "name": "Send buttons",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "ZapZap Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is menu": {
+      "main": [
+        [
+          {
+            "node": "Send buttons",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

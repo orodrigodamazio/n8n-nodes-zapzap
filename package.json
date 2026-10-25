@@ -1,22 +1,26 @@
 {
   "name": "n8n-nodes-zapzap",
-  "version": "0.1.0",
-  "description": "Nodes n8n para a ZapZap API, envie mensagens de WhatsApp e gerencie instâncias (n8n community node). WhatsApp automation for n8n.",
+  "version": "0.1.1",
+  "description": "n8n community nodes for the ZapZap API: send WhatsApp messages, media, polls, buttons and lists, react to messages, manage instances and receive real-time events.",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
     "whatsapp",
+    "whatsapp-api",
+    "whatsapp-automation",
     "zapzap",
     "zapzapapi",
     "messaging",
     "chatbot",
-    "automation"
+    "automation",
+    "webhook"
   ],
   "license": "MIT",
-  "homepage": "https://zapzapapi.com",
+  "homepage": "https://zapzapapi.com/?utm_source=npm&utm_medium=package&utm_campaign=n8n-node",
   "author": {
     "name": "GM Solutions Hub LTDA",
-    "email": "contato@zapzapapi.com"
+    "email": "contato@zapzapapi.com",
+    "url": "https://zapzapapi.com"
   },
   "repository": {
     "type": "git",
@@ -35,7 +39,9 @@
     "prepublishOnly": "npm run build"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
@@ -59,5 +65,12 @@
     "n8n-workflow": "^1.60.0",
     "prettier": "^3.3.2",
     "typescript": "^5.5.3"
+  },
+  "bugs": {
+    "url": "https://github.com/zapzapapi/n8n-nodes-zapzap/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

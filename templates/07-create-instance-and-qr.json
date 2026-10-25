@@ -1,0 +1,105 @@
+{
+  "name": "ZapZap: create an instance and get its QR code",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Creates an instance and fetches its QR code. Creating an instance is billed to your ZapZap balance, so check the price first.\nScan the QR code in WhatsApp > Linked devices.",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "instance",
+        "operation": "create",
+        "name": "my-first-instance"
+      },
+      "id": "create-instance",
+      "name": "Create instance",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        220,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "instance",
+        "operation": "getQrCode",
+        "instanceId": "={{ $json.instance.id }}"
+      },
+      "id": "get-qr-code",
+      "name": "Get QR code",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Create instance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create instance": {
+      "main": [
+        [
+          {
+            "node": "Get QR code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

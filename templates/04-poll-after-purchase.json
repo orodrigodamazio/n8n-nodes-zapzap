@@ -1,0 +1,83 @@
+{
+  "name": "ZapZap: send a poll after a purchase",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "POST {\"phone\":\"5511999999999\"} to the webhook URL after a purchase. The customer receives a native WhatsApp poll.",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zapzap-purchase",
+        "options": {}
+      },
+      "id": "purchase-webhook",
+      "name": "Purchase webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "zapzap-purchase"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendInteractive",
+        "instanceId": "YOUR_INSTANCE_ID",
+        "number": "={{ String($json.body.phone).replace(/\\D/g, '') }}",
+        "interactiveType": "poll",
+        "interactiveText": "How was your purchase?",
+        "pollChoices": "[\"Great\", \"Good\", \"Could be better\"]",
+        "selectableCount": 1
+      },
+      "id": "send-poll",
+      "name": "Send poll",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        240,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Purchase webhook": {
+      "main": [
+        [
+          {
+            "node": "Send poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

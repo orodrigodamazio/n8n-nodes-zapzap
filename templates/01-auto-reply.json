@@ -1,0 +1,140 @@
+{
+  "name": "ZapZap: auto reply to incoming messages",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Replies to every incoming message that contains the word 'hello'.\nSet the Instance ID on both ZapZap nodes and pick your ZapZap API credential. Activate the workflow.",
+        "width": 420,
+        "height": 200
+      },
+      "id": "note--200",
+      "name": "Note -200",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "instanceId": "YOUR_INSTANCE_ID",
+        "events": [
+          "messages"
+        ]
+      },
+      "id": "zapzap-trigger",
+      "name": "ZapZap Trigger",
+      "type": "n8n-nodes-zapzap.zapZapTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      },
+      "webhookId": "zapzap-trigger-hook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.data.message.fromMe }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-2",
+              "leftValue": "={{ $json.data.message.text }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "rightValue": "hello"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-hello",
+      "name": "Is hello",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendText",
+        "instanceId": "YOUR_INSTANCE_ID",
+        "number": "={{ $json.data.message.chatid.replace('@s.whatsapp.net', '') }}",
+        "text": "Hi! Thanks for your message. A person from our team will answer soon."
+      },
+      "id": "send-reply",
+      "name": "Send reply",
+      "type": "n8n-nodes-zapzap.zapZap",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ],
+      "credentials": {
+        "zapZapApi": {
+          "id": "",
+          "name": "ZapZap API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "ZapZap Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is hello",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is hello": {
+      "main": [
+        [
+          {
+            "node": "Send reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
