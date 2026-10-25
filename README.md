@@ -4,6 +4,8 @@ n8n community nodes for the [ZapZap API](https://zapzapapi.com/?utm_source=n8n&u
 
 [![npm](https://img.shields.io/npm/v/n8n-nodes-zapzap.svg)](https://www.npmjs.com/package/n8n-nodes-zapzap)
 
+Languages: English | [Português](README.pt-BR.md) | [Español](README.es.md)
+
 You need a ZapZap account and at least one WhatsApp instance. Create them at [app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node).
 
 ## Install

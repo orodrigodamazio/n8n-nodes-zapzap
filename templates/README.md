@@ -1,5 +1,7 @@
 # Workflow templates
 
+Languages: English | [Português](README.pt-BR.md) | [Español](README.es.md)
+
 Importable n8n workflows that use the [ZapZap community nodes](../README.md). Install `n8n-nodes-zapzap` first, then in n8n choose **Workflows > Import from file** and pick a JSON file.
 
 After importing: select your **ZapZap API** credential on each ZapZap node and replace `YOUR_INSTANCE_ID` with the ID of your WhatsApp instance. Numbers use digits only with country code (`5511999999999`).
@@ -20,3 +22,4 @@ Notes:
 - Creating an instance (template 07) is billed to your ZapZap balance. See the [pricing page](https://zapzapapi.com/precos?utm_source=n8n&utm_medium=community&utm_campaign=templates).
 - Message only people who expect to hear from you. WhatsApp can restrict numbers that send unwanted messages.
 - Full API reference: [zapzapapi.com/docs](https://zapzapapi.com/docs?utm_source=n8n&utm_medium=community&utm_campaign=templates).
+- The example texts inside the workflows are in English; edit them to your language.
