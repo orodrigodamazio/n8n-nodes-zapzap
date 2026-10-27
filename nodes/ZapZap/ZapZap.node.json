@@ -1,0 +1,32 @@
+{
+  "node": "n8n-nodes-zapzap.zapZap",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": [
+    "Communication",
+    "Marketing"
+  ],
+  "resources": {
+    "credentialDocumentation": [
+      {
+        "url": "https://zapzapapi.com/docs"
+      }
+    ],
+    "primaryDocumentation": [
+      {
+        "url": "https://zapzapapi.com/docs"
+      }
+    ]
+  },
+  "alias": [
+    "whatsapp",
+    "wpp",
+    "zap",
+    "whatsapp api",
+    "chatbot",
+    "messaging",
+    "sms",
+    "notification",
+    "bot"
+  ]
+}

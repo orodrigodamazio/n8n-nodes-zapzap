@@ -1,80 +1,144 @@
 {
 	"header": {
 		"displayName": "ZapZap",
-		"description": "Send WhatsApp messages and manage instances through the ZapZap API"
+		"description": "Send WhatsApp messages, media, polls and buttons, and manage instances through the ZapZap API"
 	},
 	"nodeView": {
 		"resource": {
 			"displayName": "Resource",
-			"description": "What you want to work with",
 			"options": {
-				"message": { "displayName": "Message" },
-				"instance": { "displayName": "Instance" }
+				"account": {
+					"displayName": "Account"
+				},
+				"chat": {
+					"displayName": "Chat"
+				},
+				"custom": {
+					"displayName": "Custom API Call"
+				},
+				"group": {
+					"displayName": "Group"
+				},
+				"instance": {
+					"displayName": "Instance"
+				},
+				"message": {
+					"displayName": "Message"
+				}
 			}
 		},
 		"operation": {
 			"displayName": "Operation",
 			"options": {
-				"sendText": { "displayName": "Send Text", "description": "Send a plain text message" },
-				"sendMedia": { "displayName": "Send Media", "description": "Send an image, video, audio, document or sticker by URL" },
-				"sendInteractive": { "displayName": "Send Interactive", "description": "Send a poll, buttons or an options list" },
-				"react": { "displayName": "React", "description": "React with an emoji to an existing message" },
-				"create": { "displayName": "Create", "description": "Create a new WhatsApp instance (charged from your balance)" },
-				"getStatus": { "displayName": "Get Status", "description": "Return the WhatsApp connection status of the instance" },
-				"getQrCode": { "displayName": "Get QR Code", "description": "Return the QR code to link WhatsApp to the instance" },
-				"list": { "displayName": "List", "description": "List every instance in the account" }
+				"react": {
+					"displayName": "React",
+					"description": "React with an emoji to a message"
+				},
+				"sendContact": {
+					"displayName": "Send Contact",
+					"description": "Send a contact card"
+				},
+				"sendInteractive": {
+					"displayName": "Send Interactive",
+					"description": "Send a poll, buttons or a list"
+				},
+				"sendLocation": {
+					"displayName": "Send Location",
+					"description": "Send a map location"
+				},
+				"sendMedia": {
+					"displayName": "Send Media",
+					"description": "Send an image, video, audio, document or sticker"
+				},
+				"sendText": {
+					"displayName": "Send Text",
+					"description": "Send a text message"
+				},
+				"create": {
+					"displayName": "Create",
+					"description": "Create a WhatsApp instance (charged from your balance)"
+				},
+				"get": {
+					"displayName": "Get",
+					"description": "Get one instance"
+				},
+				"list": {
+					"displayName": "Get Many",
+					"description": "List your instances"
+				},
+				"getQrCode": {
+					"displayName": "Get QR Code",
+					"description": "Get the QR code to connect WhatsApp"
+				},
+				"getStatus": {
+					"displayName": "Get Status",
+					"description": "Get the connection status"
+				},
+				"groupCreate": {
+					"displayName": "Create",
+					"description": "Create a group"
+				},
+				"groupInfo": {
+					"displayName": "Get",
+					"description": "Get group details"
+				},
+				"groupList": {
+					"displayName": "Get Many",
+					"description": "List groups"
+				},
+				"markRead": {
+					"displayName": "Mark as Read",
+					"description": "Mark a chat as read"
+				},
+				"accountGet": {
+					"displayName": "Get",
+					"description": "Get account details and balance"
+				},
+				"customRequest": {
+					"displayName": "Make a Request",
+					"description": "Call any ZapZap endpoint, already authenticated"
+				}
 			}
 		},
 		"instanceId": {
-			"displayName": "Instance ID",
-			"description": "WhatsApp instance ID (the UUID returned when you create or list instances)",
-			"placeholder": "instance-uuid"
+			"displayName": "Instance",
+			"description": "WhatsApp instance to use. Pick it from the list."
 		},
 		"number": {
 			"displayName": "Number",
-			"description": "Recipient number in international format: country code + area code + number, digits only. For groups, use the group ID (@g.us).",
-			"placeholder": "5511999999999"
+			"description": "Recipient with country code. Spaces, plus and dashes are fine.",
+			"placeholder": "5511999990001"
 		},
 		"text": {
 			"displayName": "Text",
-			"description": "Text message content",
+			"description": "Content of the message",
 			"placeholder": "Hi! How are you?"
-		},
-		"type": {
-			"displayName": "Media Type",
-			"description": "Type of media to send"
 		},
 		"file": {
 			"displayName": "File URL",
-			"description": "Public file URL. Per-URL limit: image, video and audio around 190 MB, document around 500 MB.",
+			"description": "Public link to the file",
 			"placeholder": "https://example.com/file.jpg"
 		},
-		"interactiveType": {
-			"displayName": "Interactive Type",
-			"description": "Type of interactive message"
+		"textOptions": {
+			"displayName": "Options"
 		},
-		"interactiveText": {
-			"displayName": "Text",
-			"description": "Main text (the poll question, or the body of the buttons or list)",
-			"placeholder": "Pick an option:"
+		"mediaOptions": {
+			"displayName": "Options"
 		},
-		"id": {
-			"displayName": "Message ID",
-			"description": "Message ID in OWNER:MSGID format. Do not use the Baileys format concatenated with the JID."
+		"buttonsOptions": {
+			"displayName": "Options"
 		},
-		"emoji": {
-			"displayName": "Emoji",
-			"description": "Reaction emoji. Leave empty to remove the reaction."
+		"listOptions": {
+			"displayName": "Options"
 		},
-		"name": {
-			"displayName": "Name",
-			"description": "Instance name. Letters, numbers, _ and - only.",
-			"placeholder": "my-instance"
+		"createOptions": {
+			"displayName": "Options"
 		},
-		"textOptions": { "displayName": "Options" },
-		"mediaOptions": { "displayName": "Options" },
-		"buttonsOptions": { "displayName": "Options" },
-		"listOptions": { "displayName": "Options" },
-		"createOptions": { "displayName": "Options" }
+		"locationOptions": {
+			"displayName": "Options"
+		},
+		"contactOptions": {
+			"displayName": "Options"
+		}
 	}
 }

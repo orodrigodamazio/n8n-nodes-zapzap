@@ -1,80 +1,144 @@
 {
 	"header": {
 		"displayName": "ZapZap",
-		"description": "Envía mensajes de WhatsApp y gestiona instancias con la ZapZap API"
+		"description": "Envía mensajes, archivos, encuestas y botones de WhatsApp y gestiona instancias con la API de ZapZap"
 	},
 	"nodeView": {
 		"resource": {
 			"displayName": "Recurso",
-			"description": "Lo que quieres gestionar",
 			"options": {
-				"message": { "displayName": "Mensaje" },
-				"instance": { "displayName": "Instancia" }
+				"account": {
+					"displayName": "Cuenta"
+				},
+				"chat": {
+					"displayName": "Chat"
+				},
+				"custom": {
+					"displayName": "Llamada personalizada a la API"
+				},
+				"group": {
+					"displayName": "Grupo"
+				},
+				"instance": {
+					"displayName": "Instancia"
+				},
+				"message": {
+					"displayName": "Mensaje"
+				}
 			}
 		},
 		"operation": {
 			"displayName": "Operación",
 			"options": {
-				"sendText": { "displayName": "Enviar Texto", "description": "Envía un mensaje de texto simple" },
-				"sendMedia": { "displayName": "Enviar Multimedia", "description": "Envía imagen, video, audio, documento o sticker por URL" },
-				"sendInteractive": { "displayName": "Enviar Interactivo", "description": "Envía una encuesta, botones o una lista de opciones" },
-				"react": { "displayName": "Reaccionar", "description": "Reacciona con un emoji a un mensaje existente" },
-				"create": { "displayName": "Crear", "description": "Crea una nueva instancia de WhatsApp (se cobra de tu saldo)" },
-				"getStatus": { "displayName": "Ver Estado", "description": "Devuelve el estado de conexión de WhatsApp de la instancia" },
-				"getQrCode": { "displayName": "Obtener Código QR", "description": "Devuelve el código QR para vincular WhatsApp a la instancia" },
-				"list": { "displayName": "Listar", "description": "Lista todas las instancias de la cuenta" }
+				"react": {
+					"displayName": "Reaccionar",
+					"description": "Reacciona con un emoji a un mensaje"
+				},
+				"sendContact": {
+					"displayName": "Enviar contacto",
+					"description": "Envía una tarjeta de contacto"
+				},
+				"sendInteractive": {
+					"displayName": "Enviar botones, lista o encuesta",
+					"description": "Envía una encuesta, botones o una lista"
+				},
+				"sendLocation": {
+					"displayName": "Enviar ubicación",
+					"description": "Envía una ubicación en el mapa"
+				},
+				"sendMedia": {
+					"displayName": "Enviar imagen, video, audio o documento",
+					"description": "Envía imagen, video, audio, documento o sticker"
+				},
+				"sendText": {
+					"displayName": "Enviar mensaje de texto",
+					"description": "Envía un mensaje de texto"
+				},
+				"create": {
+					"displayName": "Crear",
+					"description": "Crea una instancia de WhatsApp (se descuenta del saldo)"
+				},
+				"get": {
+					"displayName": "Obtener",
+					"description": "Muestra una instancia"
+				},
+				"list": {
+					"displayName": "Listar",
+					"description": "Lista tus instancias"
+				},
+				"getQrCode": {
+					"displayName": "Obtener código QR",
+					"description": "Obtiene el código QR para conectar WhatsApp"
+				},
+				"getStatus": {
+					"displayName": "Ver estado",
+					"description": "Muestra el estado de la conexión"
+				},
+				"groupCreate": {
+					"displayName": "Crear",
+					"description": "Crea un grupo"
+				},
+				"groupInfo": {
+					"displayName": "Obtener",
+					"description": "Muestra los datos del grupo"
+				},
+				"groupList": {
+					"displayName": "Listar",
+					"description": "Lista los grupos"
+				},
+				"markRead": {
+					"displayName": "Marcar como leído",
+					"description": "Marca el chat como leído"
+				},
+				"accountGet": {
+					"displayName": "Obtener",
+					"description": "Muestra los datos de la cuenta y el saldo"
+				},
+				"customRequest": {
+					"displayName": "Hacer una solicitud",
+					"description": "Llama a cualquier endpoint de ZapZap, ya autenticado"
+				}
 			}
 		},
 		"instanceId": {
-			"displayName": "ID de la Instancia",
-			"description": "ID de la instancia de WhatsApp (el UUID que se devuelve al crear o listar instancias)",
-			"placeholder": "uuid-de-la-instancia"
+			"displayName": "Instancia",
+			"description": "Instancia de WhatsApp que se usará. Elígela de la lista."
 		},
 		"number": {
 			"displayName": "Número",
-			"description": "Número del destinatario en formato internacional: código de país + código de área + número, solo dígitos. Para grupos usa el ID del grupo (@g.us).",
-			"placeholder": "5511999999999"
+			"description": "Destinatario con código de país. Se aceptan espacios, + y guiones.",
+			"placeholder": "5511999990001"
 		},
 		"text": {
 			"displayName": "Texto",
-			"description": "Contenido del mensaje de texto",
+			"description": "Contenido del mensaje",
 			"placeholder": "¡Hola! ¿Cómo estás?"
 		},
-		"type": {
-			"displayName": "Tipo de Multimedia",
-			"description": "Tipo de multimedia a enviar"
-		},
 		"file": {
-			"displayName": "URL del Archivo",
-			"description": "URL pública del archivo. Límite por URL: imagen, video y audio alrededor de 190 MB, documento alrededor de 500 MB.",
+			"displayName": "URL del archivo",
+			"description": "Enlace público del archivo",
 			"placeholder": "https://ejemplo.com/archivo.jpg"
 		},
-		"interactiveType": {
-			"displayName": "Tipo de Interactivo",
-			"description": "Tipo de mensaje interactivo"
+		"textOptions": {
+			"displayName": "Opciones adicionales"
 		},
-		"interactiveText": {
-			"displayName": "Texto",
-			"description": "Texto principal (la pregunta de la encuesta, o el cuerpo de los botones o la lista)",
-			"placeholder": "Elige una opción:"
+		"mediaOptions": {
+			"displayName": "Opciones adicionales"
 		},
-		"id": {
-			"displayName": "ID del Mensaje",
-			"description": "ID del mensaje en formato OWNER:MSGID. No uses el formato Baileys concatenado con el JID."
+		"buttonsOptions": {
+			"displayName": "Opciones adicionales"
 		},
-		"emoji": {
-			"displayName": "Emoji",
-			"description": "Emoji de la reacción. Déjalo vacío para quitar la reacción."
+		"listOptions": {
+			"displayName": "Opciones adicionales"
 		},
-		"name": {
-			"displayName": "Nombre",
-			"description": "Nombre de la instancia. Solo letras, números, _ y -.",
-			"placeholder": "mi-instancia"
+		"createOptions": {
+			"displayName": "Opciones adicionales"
 		},
-		"textOptions": { "displayName": "Opciones" },
-		"mediaOptions": { "displayName": "Opciones" },
-		"buttonsOptions": { "displayName": "Opciones" },
-		"listOptions": { "displayName": "Opciones" },
-		"createOptions": { "displayName": "Opciones" }
+		"locationOptions": {
+			"displayName": "Opciones adicionales"
+		},
+		"contactOptions": {
+			"displayName": "Opciones adicionales"
+		}
 	}
 }

@@ -76,7 +76,7 @@
         "resource": "message",
         "operation": "sendText",
         "instanceId": "YOUR_ALERT_INSTANCE_ID",
-        "number": "5511999999999",
+        "number": "5511999990001",
         "text": "=Instance {{ $json.instance_name }} disconnected. Open app.zapzapapi.com to reconnect it."
       },
       "id": "alert-admin",

@@ -1,30 +1,23 @@
 {
 	"header": {
 		"displayName": "ZapZap Trigger",
-		"description": "Receive events from a ZapZap instance (messages, connection, etc) via webhook"
+		"description": "Start a workflow when a WhatsApp message or event arrives"
 	},
 	"nodeView": {
 		"instanceId": {
-			"displayName": "Instance ID",
-			"description": "WhatsApp instance ID whose webhook will be registered (the UUID from creating or listing instances)",
-			"placeholder": "instance-uuid"
+			"displayName": "Instance",
+			"description": "WhatsApp instance to listen to. Pick it from the list."
 		},
 		"events": {
 			"displayName": "Events",
-			"description": "Events that start the workflow. Empty = core events (messages, connection, status).",
-			"options": {
-				"chats": { "displayName": "Chats", "description": "Chat creation, update or removal" },
-				"connection": { "displayName": "Connection", "description": "Connection state change" },
-				"contacts": { "displayName": "Contacts", "description": "Contact creation or update" },
-				"groups": { "displayName": "Groups", "description": "Group and participant changes" },
-				"messages": { "displayName": "Messages", "description": "Incoming and outgoing messages" },
-				"messages_update": { "displayName": "Messages Update", "description": "Delivery status (sent, delivered, read)" },
-				"presence": { "displayName": "Presence", "description": "Online, offline and typing. High volume." }
-			}
+			"description": "Which events start the workflow"
 		},
 		"manualSetup": {
-			"displayName": "Set Up Webhook Manually",
-			"description": "By default the webhook is registered and removed automatically. Turn this on only if you prefer to point the webhook yourself, in the panel or via the API."
+			"displayName": "Set Webhook Manually",
+			"description": "Skip automatic registration and point the webhook yourself"
+		},
+		"options": {
+			"displayName": "Options"
 		}
 	}
 }

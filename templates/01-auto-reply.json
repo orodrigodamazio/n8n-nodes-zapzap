@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "Replies to every incoming message that contains the word 'hello'.\nSet the Instance ID on both ZapZap nodes and pick your ZapZap API credential. Activate the workflow.",
+        "content": "Replies to every incoming message that contains the word 'hello'.\nPick your instance in both ZapZap nodes and pick your ZapZap API credential. Activate the workflow.",
         "width": 420,
         "height": 200
       },

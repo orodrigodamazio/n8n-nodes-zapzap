@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "POST {\"phone\":\"5511999999999\"} to the webhook URL after a purchase. The customer receives a native WhatsApp poll.",
+        "content": "POST {\"phone\":\"5511999990001\"} to the webhook URL after a purchase. The customer receives a native WhatsApp poll.",
         "width": 420,
         "height": 200
       },

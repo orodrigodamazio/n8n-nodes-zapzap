@@ -1,74 +1,94 @@
 # n8n-nodes-zapzap
 
-Nodos da comunidade n8n para a [API da ZapZap](https://zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node). Envie texto, mídia, enquetes, botões e listas pelo WhatsApp, reaja a mensagens, gerencie instâncias e inicie fluxos a partir de eventos recebidos.
+Nós da comunidade n8n para a [API do ZapZap](https://zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node). Envie texto, mídia, enquetes, botões e listas no WhatsApp, reaja a mensagens, gerencie grupos e instâncias e inicie fluxos a partir de eventos recebidos.
 
 Idiomas: [English](README.md) | Português | [Español](README.es.md)
 
-Você precisa de uma conta ZapZap e de ao menos uma instância de WhatsApp. Crie em [app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node).
+## Comece em 3 passos
 
-## Instalação
+1. **Instale.** No n8n abra **Settings > Community Nodes > Install**, digite `n8n-nodes-zapzap` e aceite. ([guia](https://docs.n8n.io/integrations/community-nodes/installation/))
+2. **Cole suas chaves.** No painel do ZapZap ([app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node)) abra **Configurações > API** e copie a API Key e o API Secret. No n8n crie uma credencial **ZapZap API**, cole os dois e clique em **Test**. Deve aparecer "Conectado como ..." com o número de instâncias.
+3. **Envie a primeira mensagem.** Adicione o nó **ZapZap**, deixe Recurso = Mensagem e Operação = Send Text, escolha a instância na lista (aparece o nome e se está conectada), digite número e texto e execute.
 
-No n8n vá em **Settings > Community Nodes > Install**, digite `n8n-nodes-zapzap` e aceite o aviso de community nodes. Os nodes **ZapZap** e **ZapZap Trigger** aparecem ao buscar "ZapZap" ou "WhatsApp".
+Quer um fluxo pronto? Importe qualquer arquivo de [`templates/`](templates/README.pt-BR.md).
 
-## Credenciais
+## Credencial
 
-1. No painel da ZapZap abra **Configurações** e copie sua **API Key** e seu **API Secret**.
-2. No n8n crie uma credencial **ZapZap API**: API Key (header `x-api-key`), API Secret (header `x-api-secret`) e Base URL `https://api.zapzapapi.com/api/v1`.
-3. Clique em **Test**. O node chama `GET /account` e confirma que as chaves funcionam.
-
-Guarde as chaves no cofre de credenciais do n8n. Nunca as exponha em um navegador.
-
-## Node ZapZap
-
-### Message
-
-| Operação | Chamada da API | Campos principais |
-|---|---|---|
-| Send Text | `POST /{instanceId}/send/text` | Number, Text, opcional: menções, ID de resposta, delay |
-| Send Media | `POST /{instanceId}/send/media` | Number, Media Type, File URL, opcional: legenda e nome do documento |
-| Send Interactive | `POST /{instanceId}/send/poll`, `/send/buttons` ou `/send/list` | Number, Text, opções ou botões em JSON |
-| React | `POST /{instanceId}/message/react` | Number, Message ID, Emoji |
-
-### Instance
-
-| Operação | Chamada da API |
+| Campo | O que colocar |
 |---|---|
-| Create | `POST /instances` |
-| Get Status | `GET /{instanceId}/instance/status` |
-| Get QR Code | `GET /instances/{instanceId}/qrcode` |
-| List | `GET /instances` |
+| API Key / API Secret | Copiados do painel do ZapZap, Configurações > API |
+| Default Country Code | Opcional. Com `55`, o número `11 99999-0001` vira `5511999990001` |
+| Language of Error Messages | English, Português ou Español |
+| Base URL | Deixe como está. Só mude para instalação própria do ZapZap (precisa ser https) |
 
-Os números usam formato internacional, só dígitos: DDI, DDD e número (por exemplo `5511999999999`). Para grupos use o ID do grupo, que termina em `@g.us`.
+As chaves ficam no cofre de credenciais do n8n e vão somente nos cabeçalhos `x-api-key` e `x-api-secret` para a Base URL. Nunca entram na saída do nó, em logs ou em mensagens de erro.
 
-Criar uma instância é cobrado do seu saldo na ZapZap. Veja o preço atual na [página de preços](https://zapzapapi.com/precos?utm_source=n8n&utm_medium=community&utm_campaign=node) antes de automatizar.
+## Nó ZapZap
 
-## Node ZapZap Trigger
+| Recurso | Operações |
+|---|---|
+| Message | Send Text, Send Media (URL ou arquivo binário), Send Interactive (enquete, botões, lista), Send Location, Send Contact, React |
+| Group | Get Many, Get, Create |
+| Chat | Mark as Read |
+| Instance | Create, Get, Get Many, Get Status, Get QR Code (também devolvido como imagem) |
+| Account | Get |
+| Custom API Call | Qualquer outro endpoint da [referência da API](https://zapzapapi.com/docs), já autenticado |
 
-Inicia um fluxo quando chegam eventos de WhatsApp em uma das suas instâncias.
+Bom saber:
 
-1. Adicione o **ZapZap Trigger**, escolha a credencial e informe o **Instance ID**.
-2. Ative o fluxo. O node registra a URL de produção como webhook da instância e remove ao desativar.
-3. Opcionalmente limite os **Events** (messages, connection, messages update, groups, contacts, chats, presence). Vazio significa os eventos principais.
+- **Números** aceitam qualquer formato de país: `+1 (415) 555-0100`, `+44 7700 900123`, `5511999990001`. Espaços, parênteses, hífens e `00` ou `+` no início são limpos. Em números do Brasil, o nono dígito que faltar em celular é adicionado. Grupos usam o ID terminado em `@g.us`.
+- **Arquivos binários** (do HTTP Request, Read Binary File etc.) vão até cerca de 1 MB. Acima disso use URL.
+- **Texto** pode ter emoji e qualquer alfabeto (árabe, hebraico, chinês, japonês, coreano).
+- **Vários itens** de entrada geram vários resultados. Ligue **Continue On Fail** para receber um item de erro nos que falharem e seguir adiante.
+- **Limite de requisições**: resposta 429 é repetida até 3 vezes, esperando o tempo de `Retry-After`. Erros temporários 502/503/504 são repetidos só em consultas.
+- **Sem mensagem duplicada**: um envio nunca é repetido após timeout ou erro do servidor, porque a mensagem pode já ter saído. O nó para com uma mensagem clara para você decidir. (A API não tem chave de idempotência.)
+- **Redirecionamentos** nunca são seguidos, então suas chaves não vão para outro servidor.
+- Pode ser usado como **ferramenta de agente de IA** no n8n.
+- Criar instância é cobrado do saldo; veja os [preços](https://zapzapapi.com/precos?utm_source=n8n&utm_medium=community&utm_campaign=node) antes.
 
-A URL do webhook precisa ser HTTPS pública. Um n8n local em `http://localhost` é recusado: use um túnel ou ligue **Set Webhook Manually**.
+## Nó ZapZap Trigger
 
-Cada evento traz `instance_id`, `instance_name`, `metadata`, `event` e `data`. Em uma mensagem recebida o texto está em `data.message.text`, o chat em `data.message.chatid` e `data.message.fromMe` indica se foi você quem enviou. Eventos de conexão trazem o estado em `data.instance.status` (`connecting`, `connected`, `disconnected` ou `qrcode`).
+1. Adicione o **ZapZap Trigger**, escolha a credencial e a instância na lista.
+2. Ative o fluxo. O nó registra a URL na instância e remove ao desativar. O n8n precisa de endereço HTTPS público.
+3. Escolha os **Events** (padrão: mensagens).
 
-## Exemplos
+A saída traz campos fáceis no topo: `from`, `text`, `type`, `time`, `chatId`, `isGroup`, `fromMe`, `messageId`, `instanceName`, além do conteúdo completo (`data.message...`).
 
-Os fluxos prontos para importar estão em [`templates/`](templates/README.pt-BR.md): resposta automática, formulário para WhatsApp, lembrete diário, enquete pós-compra, menu de botões, alerta de desconexão e criar instância com QR.
+- Toda entrega é assinada (`X-ZapZap-Signature`, HMAC-SHA256 com horário). O nó confere com comparação em tempo constante e recusa entregas falsas ou com mais de 5 minutos. Com **Set Webhook Manually**, cole o segredo em Options; sem ele não dá para verificar.
+- Entregas repetidas (mesmo ID de entrega) são ignoradas. Ligue **Ignore My Own Messages** em respostas automáticas.
+- A resposta sai na hora; seu fluxo roda depois.
+- Enquanto usa "Listen for test event", o webhook da instância aponta para a URL de teste e volta ao normal quando você para.
 
-Padrão rápido: `ZapZap Trigger` (messages) > `IF` com `data.message.fromMe` falso e texto contendo "oi" > `ZapZap` Send Text, com Number `{{ $json.data.message.chatid.replace('@s.whatsapp.net', '') }}`.
+## O que o nó envia ao ZapZap
+
+Toda requisição ao ZapZap leva dois cabeçalhos, para o suporte e as estatísticas de uso saberem qual ferramenta está chamando:
+
+```
+X-ZapZap-Client: n8n-nodes-zapzap/<versão>
+User-Agent: n8n-nodes-zapzap/<versão>
+```
+
+É só o nome e a versão deste nó. Nada sobre seus fluxos, seu n8n ou seus usuários é enviado, além dos dados que você mesmo coloca nas operações (mensagem, número, instância) e das suas chaves de API, que o ZapZap precisa para autenticar a chamada. O nó não lê variáveis de ambiente nem arquivos e não tem dependências em tempo de execução.
+
+## Problemas comuns
+
+| Mensagem | O que fazer |
+|---|---|
+| API Key ou API Secret inválidas | Copie os dois de novo em Configurações > API |
+| Instância não está conectada | Abra a instância no painel e leia o QR code |
+| Número parece inválido | Use o código do país e confira se o número tem WhatsApp |
+| Limite de requisições | Coloque um nó Wait entre os envios |
+| Webhook precisa de HTTPS | Defina `WEBHOOK_URL` no n8n com seu endereço https público, ou use Set Webhook Manually |
 
 ## Documentação
 
 - [Documentação da API](https://zapzapapi.com/docs?utm_source=n8n&utm_medium=community&utm_campaign=node)
 - [Docs para assistentes de IA (llms.txt)](https://api.zapzapapi.com/llms.txt)
-- [Community nodes do n8n](https://docs.n8n.io/integrations/community-nodes/)
+- [Nós da comunidade n8n](https://docs.n8n.io/integrations/community-nodes/)
 
 ## Avisos
 
-A ZapZap conecta contas comuns de WhatsApp por um canal não oficial. O WhatsApp pode restringir números que enviam mensagens indesejadas ou em massa. Fale só com quem espera a sua mensagem e respeite os termos do WhatsApp e as leis de privacidade aplicáveis.
+O ZapZap conecta contas comuns de WhatsApp por um canal não oficial. O WhatsApp pode restringir números que enviam mensagens não solicitadas ou em massa. Escreva só para quem espera receber e siga os termos do WhatsApp e as leis de privacidade que se aplicam aos seus contatos.
 
 ## Licença
 

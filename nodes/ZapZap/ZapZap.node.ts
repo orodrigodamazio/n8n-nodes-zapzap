@@ -1,4 +1,34 @@
-import { INodeType, INodeTypeDescription } from 'n8n-workflow';
+import type {
+	ICredentialsDecrypted,
+	ICredentialTestFunctions,
+	INodeCredentialTestResult,
+	IDataObject,
+	IExecuteFunctions,
+	ILoadOptionsFunctions,
+	INodeExecutionData,
+	INodePropertyOptions,
+	INodeType,
+	INodeTypeDescription,
+} from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
+import {
+	clientHeaders,
+	DEFAULT_BASE_URL,
+	friendlyMessage,
+	loadInstanceOptions,
+	toLang,
+	validateBaseUrl,
+	validateHttpUrl,
+	normalizeNumber,
+	parseJsonParam,
+	requireValue,
+	zapZapRequest,
+} from '../shared/client';
+
+/** Largest file sent as base64 in the body. The public API accepts about 2 MB of JSON. */
+export const MAX_BINARY_BYTES = 1_400_000;
+
+const MESSAGE_RESOURCES = ['message', 'group', 'chat'];
 
 export class ZapZap implements INodeType {
 	description: INodeTypeDescription = {
@@ -8,24 +38,20 @@ export class ZapZap implements INodeType {
 		group: ['output'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Send WhatsApp messages and manage instances through the ZapZap API',
+		description: 'Send WhatsApp messages, media, polls and buttons, and manage instances through the ZapZap API',
 		defaults: {
 			name: 'ZapZap',
 		},
+		usableAsTool: true,
 		inputs: ['main'],
 		outputs: ['main'],
 		credentials: [
 			{
 				name: 'zapZapApi',
 				required: true,
+				testedBy: 'zapZapApiTest',
 			},
 		],
-		requestDefaults: {
-			baseURL: '={{$credentials.baseUrl}}',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		},
 		properties: [
 			// ========================= RESOURCE =========================
 			{
@@ -34,8 +60,12 @@ export class ZapZap implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				options: [
-					{ name: 'Message', value: 'message' },
+					{ name: 'Account', value: 'account' },
+					{ name: 'Chat', value: 'chat' },
+					{ name: 'Custom API Call', value: 'custom' },
+					{ name: 'Group', value: 'group' },
 					{ name: 'Instance', value: 'instance' },
+					{ name: 'Message', value: 'message' },
 				],
 				default: 'message',
 			},
@@ -49,52 +79,40 @@ export class ZapZap implements INodeType {
 				displayOptions: { show: { resource: ['message'] } },
 				options: [
 					{
-						name: 'Send Text',
-						value: 'sendText',
-						action: 'Send a text message',
-						description: 'Send a plain text message to a WhatsApp number',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '=/{{$parameter.instanceId}}/send/text',
-							},
-						},
-					},
-					{
-						name: 'Send Media',
-						value: 'sendMedia',
-						action: 'Send media',
-						description: 'Send an image, video, audio, document or sticker from a public URL',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '=/{{$parameter.instanceId}}/send/media',
-							},
-						},
-					},
-					{
-						name: 'Send Interactive',
-						value: 'sendInteractive',
-						action: 'Send an interactive message',
-						description: 'Send a poll, buttons or an option list',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '=/{{$parameter.instanceId}}/send/{{$parameter.interactiveType}}',
-							},
-						},
-					},
-					{
 						name: 'React',
 						value: 'react',
 						action: 'React to a message',
 						description: 'React with an emoji to an existing message',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '=/{{$parameter.instanceId}}/message/react',
-							},
-						},
+					},
+					{
+						name: 'Send Contact',
+						value: 'sendContact',
+						action: 'Send a contact card',
+						description: 'Send a contact card (vCard)',
+					},
+					{
+						name: 'Send Interactive',
+						value: 'sendInteractive',
+						action: 'Send a poll buttons or list',
+						description: 'Send a poll, buttons or an option list',
+					},
+					{
+						name: 'Send Location',
+						value: 'sendLocation',
+						action: 'Send a location',
+						description: 'Send a map location',
+					},
+					{
+						name: 'Send Media',
+						value: 'sendMedia',
+						action: 'Send an image video audio or document',
+						description: 'Send an image, video, audio, document or sticker from a URL or from binary data',
+					},
+					{
+						name: 'Send Text',
+						value: 'sendText',
+						action: 'Send a text message',
+						description: 'Send a plain text message to a WhatsApp number or group',
 					},
 				],
 				default: 'sendText',
@@ -113,106 +131,209 @@ export class ZapZap implements INodeType {
 						value: 'create',
 						action: 'Create an instance',
 						description: 'Create a new WhatsApp instance (charged from your balance)',
-						routing: {
-							request: {
-								method: 'POST',
-								url: '/instances',
-							},
-						},
+					},
+					{
+						name: 'Get',
+						value: 'get',
+						action: 'Get an instance',
+						description: 'Get the details of one instance',
+					},
+					{
+						name: 'Get Many',
+						value: 'list',
+						action: 'List instances',
+						description: 'List every instance in your account',
+					},
+					{
+						name: 'Get QR Code',
+						value: 'getQrCode',
+						action: 'Get the QR code',
+						description: 'Get the QR code to connect WhatsApp to the instance',
 					},
 					{
 						name: 'Get Status',
 						value: 'getStatus',
 						action: 'Get connection status',
 						description: 'Get the WhatsApp connection status of the instance',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '=/{{$parameter.instanceId}}/instance/status',
-							},
-						},
-					},
-					{
-						name: 'Get QR Code',
-						value: 'getQrCode',
-						action: 'Get QR code',
-						description: 'Get the QR code to connect WhatsApp to the instance',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '=/instances/{{$parameter.instanceId}}/qrcode',
-							},
-						},
-					},
-					{
-						name: 'List',
-						value: 'list',
-						action: 'List instances',
-						description: 'List every instance in your account',
-						routing: {
-							request: {
-								method: 'GET',
-								url: '/instances',
-							},
-						},
 					},
 				],
-				default: 'create',
+				default: 'list',
 			},
 
-			// ========================= INSTANCE ID (shared) =========================
+			// ========================= GROUP / CHAT / ACCOUNT: OPERATIONS =========================
 			{
-				displayName: 'Instance ID',
-				name: 'instanceId',
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['group'] } },
+				options: [
+					{
+						name: 'Create',
+						value: 'groupCreate',
+						action: 'Create a group',
+						description: 'Create a WhatsApp group with participants',
+					},
+					{
+						name: 'Get',
+						value: 'groupInfo',
+						action: 'Get group info',
+						description: 'Get the details of a group',
+					},
+					{
+						name: 'Get Many',
+						value: 'groupList',
+						action: 'List groups',
+						description: 'List the groups of the instance',
+					},
+				],
+				default: 'groupList',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['chat'] } },
+				options: [
+					{
+						name: 'Mark as Read',
+						value: 'markRead',
+						action: 'Mark a chat as read',
+						description: 'Mark the conversation as read',
+					},
+				],
+				default: 'markRead',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['account'] } },
+				options: [
+					{
+						name: 'Get',
+						value: 'accountGet',
+						action: 'Get account details',
+						description: 'Get your account details and balance',
+					},
+				],
+				default: 'accountGet',
+			},
+
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { resource: ['custom'] } },
+				options: [
+					{
+						name: 'Make a Request',
+						value: 'customRequest',
+						action: 'Make a custom API request',
+						description: 'Call any ZapZap API endpoint that has no dedicated operation, already authenticated',
+					},
+				],
+				default: 'customRequest',
+			},
+			{
+				displayName: 'Method',
+				name: 'method',
+				type: 'options',
+				default: 'GET',
+				options: [
+					{ name: 'DELETE', value: 'DELETE' },
+					{ name: 'GET', value: 'GET' },
+					{ name: 'POST', value: 'POST' },
+					{ name: 'PUT', value: 'PUT' },
+				],
+				displayOptions: { show: { resource: ['custom'] } },
+			},
+			{
+				displayName: 'Path',
+				name: 'path',
 				type: 'string',
 				required: true,
 				default: '',
-				placeholder: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+				placeholder: '/account',
 				description:
-					'WhatsApp instance identifier (the UUID returned when you create or list instances). Find it in your instances list or in the panel at app.zapzapapi.com.',
-				displayOptions: {
-					show: {
-						resource: ['message'],
-					},
-				},
+					'Endpoint path after the base URL, starting with "/". Use the instance ID in the path when needed. See the API reference at zapzapapi.com/docs.',
+				displayOptions: { show: { resource: ['custom'] } },
 			},
 			{
-				displayName: 'Instance ID',
+				displayName: 'Body (JSON)',
+				name: 'customBody',
+				type: 'json',
+				default: '{}',
+				description: 'JSON body for POST and PUT',
+				displayOptions: { show: { resource: ['custom'], method: ['POST', 'PUT'] } },
+			},
+			{
+				displayName: 'Query (JSON)',
+				name: 'customQuery',
+				type: 'json',
+				default: '{}',
+				description: 'Query string parameters as JSON',
+				displayOptions: { show: { resource: ['custom'] } },
+			},
+
+			// ========================= INSTANCE ID =========================
+			{
+				displayName: 'Instance Name or ID',
 				name: 'instanceId',
-				type: 'string',
+				type: 'options',
 				required: true,
 				default: '',
-				placeholder: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+				typeOptions: { loadOptionsMethod: 'getInstances' },
 				description:
-					'WhatsApp instance identifier (the UUID returned when you create or list instances). Find it in your instances list or in the panel at app.zapzapapi.com.',
+					'WhatsApp instance to use. Pick it from the list, or set it with an expression. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				displayOptions: { show: { resource: MESSAGE_RESOURCES } },
+			},
+			{
+				displayName: 'Instance Name or ID',
+				name: 'instanceId',
+				type: 'options',
+				required: true,
+				default: '',
+				typeOptions: { loadOptionsMethod: 'getInstances' },
+				description:
+					'WhatsApp instance to use. Pick it from the list, or set it with an expression. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				displayOptions: {
-					show: {
-						resource: ['instance'],
-						operation: ['getStatus', 'getQrCode'],
-					},
+					show: { resource: ['instance'], operation: ['get', 'getStatus', 'getQrCode'] },
 				},
 			},
 
-			// ========================= MESSAGE > NUMBER (shared send/react) =========================
+			// ========================= NUMBER =========================
 			{
 				displayName: 'Number',
 				name: 'number',
 				type: 'string',
 				required: true,
 				default: '',
-				placeholder: '5511999999999',
+				placeholder: '5511999990001',
 				description:
-					'Recipient number in international format: country code + area code + number, digits only (e.g. 5511999999999). For groups, use the group ID (ending in @g.us).',
+					'Recipient in international format: country code + area code + number (e.g. 5511999990001). Spaces, plus and dashes are removed for you. For groups, use the group ID (ending in @g.us).',
 				displayOptions: {
 					show: {
 						resource: ['message'],
-						operation: ['sendText', 'sendMedia', 'sendInteractive', 'react'],
+						operation: ['sendText', 'sendMedia', 'sendInteractive', 'react', 'sendLocation', 'sendContact'],
 					},
 				},
-				routing: { send: { type: 'body', property: 'number' } },
+			},
+			{
+				displayName: 'Number',
+				name: 'number',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: '5511999990001',
+				description: 'Chat number (international format) or chat ID',
+				displayOptions: { show: { resource: ['chat'], operation: ['markRead'] } },
 			},
 
-			// ========================= MESSAGE > SEND TEXT =========================
+			// ========================= SEND TEXT =========================
 			{
 				displayName: 'Text',
 				name: 'text',
@@ -222,21 +343,23 @@ export class ZapZap implements INodeType {
 				default: '',
 				placeholder: 'Hi! How are you?',
 				description: 'Content of the text message',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendText'] },
-				},
-				routing: { send: { type: 'body', property: 'text' } },
+				displayOptions: { show: { resource: ['message'], operation: ['sendText'] } },
 			},
 			{
 				displayName: 'Options',
 				name: 'textOptions',
 				type: 'collection',
-				placeholder: 'Add option',
+				placeholder: 'Add Option',
 				default: {},
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendText'] },
-				},
+				displayOptions: { show: { resource: ['message'], operation: ['sendText'] } },
 				options: [
+					{
+						displayName: 'Delay (Ms)',
+						name: 'delay',
+						type: 'number',
+						default: 0,
+						description: 'Wait this long before sending, in milliseconds',
+					},
 					{
 						displayName: 'Mentions',
 						name: 'mentions',
@@ -244,8 +367,7 @@ export class ZapZap implements INodeType {
 						default: '',
 						placeholder: 'all',
 						description:
-							'Groups only. Use "all" to mention every member (hidden mention that still notifies everyone), or a comma-separated list of numbers.',
-						routing: { send: { type: 'body', property: 'mentions' } },
+							'Groups only. Use "all" to mention every member, or a comma-separated list of numbers.',
 					},
 					{
 						displayName: 'Reply to Message ID',
@@ -253,40 +375,60 @@ export class ZapZap implements INodeType {
 						type: 'string',
 						default: '',
 						description: 'ID of the message to reply to (quote)',
-						routing: { send: { type: 'body', property: 'replyid' } },
 					},
 					{
-						displayName: 'Delay (Ms)',
-						name: 'delay',
-						type: 'number',
-						default: 0,
-						description: 'Delay before sending, in milliseconds (shows the "typing..." indicator)',
-						routing: { send: { type: 'body', property: 'delay' } },
+						displayName: 'Show Typing Indicator',
+						name: 'typing',
+						type: 'boolean',
+						default: true,
+						description:
+							'Whether to show "typing..." before sending, proportional to the text length. On by default in ZapZap; turn off to send faster.',
 					},
 				],
 			},
 
-			// ========================= MESSAGE > SEND MEDIA =========================
+			// ========================= SEND MEDIA =========================
 			{
 				displayName: 'Media Type',
 				name: 'type',
 				type: 'options',
 				default: 'image',
 				description: 'Type of media to send',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendMedia'] },
-				},
+				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'] } },
 				options: [
 					{ name: 'Audio (File)', value: 'audio', description: 'Audio as a file (MP3, OGG, WAV)' },
-					{ name: 'Document', value: 'document', description: 'Document (PDF, DOCX, XLSX and similar). Set Document Name.' },
+					{ name: 'Document', value: 'document', description: 'Document (PDF, DOCX, XLSX and similar)' },
 					{ name: 'Image', value: 'image', description: 'Image (JPG, PNG, GIF, WebP)' },
-					{ name: 'Native Audio (Myaudio)', value: 'myaudio', description: 'WhatsApp native audio (OGG/Opus), similar to a voice note' },
+					{
+						name: 'Native Audio (Myaudio)',
+						value: 'myaudio',
+						description: 'WhatsApp native audio (OGG/Opus), similar to a voice note',
+					},
 					{ name: 'Sticker', value: 'sticker', description: 'Sticker (WebP)' },
 					{ name: 'Video', value: 'video', description: 'Video (MP4, AVI, MOV)' },
-					{ name: 'Video Note (PTV)', value: 'ptv', description: 'Round video note. Always circular and ignores the caption.' },
-					{ name: 'Voice (PTT)', value: 'ptt', description: 'Voice note / push-to-talk (microphone bubble)' },
+					{
+						name: 'Video Note (PTV)',
+						value: 'ptv',
+						description: 'Round video note. Always circular and ignores the caption.',
+					},
+					{ name: 'Voice (PTT)', value: 'ptt', description: 'Voice note (microphone bubble)' },
 				],
-				routing: { send: { type: 'body', property: 'type' } },
+			},
+			{
+				displayName: 'Source',
+				name: 'mediaSource',
+				type: 'options',
+				default: 'url',
+				description: 'Where the file comes from',
+				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'] } },
+				options: [
+					{ name: 'URL', value: 'url', description: 'Public URL of the file (up to about 190 MB)' },
+					{
+						name: 'Binary Data',
+						value: 'binary',
+						description: 'File from a previous node, such as HTTP Request or Read Binary File (up to about 1 MB)',
+					},
+				],
 			},
 			{
 				displayName: 'File URL',
@@ -297,20 +439,24 @@ export class ZapZap implements INodeType {
 				placeholder: 'https://example.com/file.jpg',
 				description:
 					'Public URL of the file. Size limit per URL: around 190 MB for image, video and audio, and around 500 MB for documents.',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendMedia'] },
-				},
-				routing: { send: { type: 'body', property: 'file' } },
+				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'], mediaSource: ['url'] } },
+			},
+			{
+				displayName: 'Input Binary Field',
+				name: 'binaryPropertyName',
+				type: 'string',
+				required: true,
+				default: 'data',
+				description: 'Name of the binary field that holds the file. For files larger than 1 MB use a URL instead.',
+				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'], mediaSource: ['binary'] } },
 			},
 			{
 				displayName: 'Options',
 				name: 'mediaOptions',
 				type: 'collection',
-				placeholder: 'Add option',
+				placeholder: 'Add Option',
 				default: {},
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendMedia'] },
-				},
+				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'] } },
 				options: [
 					{
 						displayName: 'Caption',
@@ -318,8 +464,14 @@ export class ZapZap implements INodeType {
 						type: 'string',
 						typeOptions: { rows: 2 },
 						default: '',
-						description: 'Caption (image and video only). Ignored for video notes (ptv).',
-						routing: { send: { type: 'body', property: 'text' } },
+						description: 'Caption (image and video only). Ignored for video notes.',
+					},
+					{
+						displayName: 'Delay (Ms)',
+						name: 'delay',
+						type: 'number',
+						default: 0,
+						description: 'Wait this long before sending, in milliseconds',
 					},
 					{
 						displayName: 'Document Name',
@@ -327,8 +479,8 @@ export class ZapZap implements INodeType {
 						type: 'string',
 						default: '',
 						placeholder: 'file.pdf',
-						description: 'File name shown in the chat. Required when Media Type is Document.',
-						routing: { send: { type: 'body', property: 'docName' } },
+						description:
+							'File name shown in the chat. Needed for documents; filled from the binary file name when empty.',
 					},
 					{
 						displayName: 'Mentions',
@@ -337,33 +489,29 @@ export class ZapZap implements INodeType {
 						default: '',
 						placeholder: 'all',
 						description: 'Groups only. Use "all" or a comma-separated list of numbers.',
-						routing: { send: { type: 'body', property: 'mentions' } },
 					},
 					{
-						displayName: 'Delay (Ms)',
-						name: 'delay',
-						type: 'number',
-						default: 0,
-						description: 'Delay before sending, in milliseconds',
-						routing: { send: { type: 'body', property: 'delay' } },
+						displayName: 'Show Typing Indicator',
+						name: 'typing',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to show "typing..." before sending. Turn off to send faster.',
 					},
 				],
 			},
 
-			// ========================= MESSAGE > SEND INTERACTIVE =========================
+			// ========================= SEND INTERACTIVE =========================
 			{
 				displayName: 'Interactive Type',
 				name: 'interactiveType',
 				type: 'options',
 				default: 'poll',
 				description: 'Type of interactive message',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendInteractive'] },
-				},
+				displayOptions: { show: { resource: ['message'], operation: ['sendInteractive'] } },
 				options: [
-					{ name: 'Poll', value: 'poll', description: 'Native WhatsApp poll (/send/poll)' },
-					{ name: 'Buttons', value: 'buttons', description: 'Up to 3 clickable buttons (/send/buttons)' },
-					{ name: 'List', value: 'list', description: 'Menu list with sections and items (/send/list)' },
+					{ name: 'Buttons', value: 'buttons', description: 'Up to 3 clickable buttons' },
+					{ name: 'List', value: 'list', description: 'Menu list with sections and items' },
+					{ name: 'Poll', value: 'poll', description: 'Native WhatsApp poll' },
 				],
 			},
 			{
@@ -375,12 +523,8 @@ export class ZapZap implements INodeType {
 				default: '',
 				placeholder: 'Choose an option:',
 				description: 'Main text (the poll question, or the body of the buttons or list)',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['sendInteractive'] },
-				},
-				routing: { send: { type: 'body', property: 'text' } },
+				displayOptions: { show: { resource: ['message'], operation: ['sendInteractive'] } },
 			},
-			// Poll fields
 			{
 				displayName: 'Choices (JSON Array)',
 				name: 'pollChoices',
@@ -391,44 +535,39 @@ export class ZapZap implements INodeType {
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['poll'] },
 				},
-				routing: { send: { type: 'body', property: 'choices', value: '={{ JSON.parse($value) }}' } },
 			},
 			{
 				displayName: 'Selectable Count',
 				name: 'selectableCount',
 				type: 'number',
 				default: 1,
-				description: 'How many options each person can pick (greater than 1 means multiple choice, 0 means unlimited)',
+				description: 'How many options each person can pick (0 means unlimited)',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['poll'] },
 				},
-				routing: { send: { type: 'body', property: 'selectableCount' } },
 			},
-			// Buttons fields
 			{
 				displayName: 'Buttons (JSON Array)',
 				name: 'buttonsJson',
 				type: 'json',
 				required: true,
-				default:
-					'[{"text":"Yes","id":"yes"},{"text":"Our site","url":"https://example.com"}]',
-				description:
-					'Up to 3 buttons. Use text + ID for a quick reply, text + URL to open a link, text + phone to call, or text + copy to copy a code.',
+				default: '[{"text":"Yes","id":"yes"},{"text":"Our site","url":"https://example.com"}]',
+				description: 'Up to 3 buttons. Each button has a text and one action: a quick reply, a link, a phone number to call, or a code to copy. Keep the example shape and change the values.',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['buttons'] },
 				},
-				routing: { send: { type: 'body', property: 'buttons', value: '={{ JSON.parse($value) }}' } },
 			},
 			{
 				displayName: 'Options',
 				name: 'buttonsOptions',
 				type: 'collection',
-				placeholder: 'Add option',
+				placeholder: 'Add Option',
 				default: {},
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['buttons'] },
 				},
 				options: [
+					{ displayName: 'Footer', name: 'footer', type: 'string', default: '', description: 'Footer text' },
 					{
 						displayName: 'Image URL',
 						name: 'image',
@@ -436,41 +575,37 @@ export class ZapZap implements INodeType {
 						default: '',
 						placeholder: 'https://example.com/banner.jpg',
 						description: 'Image shown above the buttons',
-						routing: { send: { type: 'body', property: 'image' } },
-					},
-					{
-						displayName: 'Footer',
-						name: 'footer',
-						type: 'string',
-						default: '',
-						description: 'Footer text',
-						routing: { send: { type: 'body', property: 'footer' } },
 					},
 				],
 			},
-			// List fields
 			{
 				displayName: 'Choices (JSON Array)',
 				name: 'listChoices',
 				type: 'json',
 				required: true,
 				default: '["[Products]", "T-shirt|p1|$ 50", "Pants|p2|$ 120"]',
-				description: 'Use "[Section]" for a header and "Label|value|description" for each selectable item',
+				description: 'Use "[Section]" for a header and "Label|ID|description" for each selectable item',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['list'] },
 				},
-				routing: { send: { type: 'body', property: 'choices', value: '={{ JSON.parse($value) }}' } },
 			},
 			{
 				displayName: 'Options',
 				name: 'listOptions',
 				type: 'collection',
-				placeholder: 'Add option',
+				placeholder: 'Add Option',
 				default: {},
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['list'] },
 				},
 				options: [
+					{
+						displayName: 'Footer Text',
+						name: 'footerText',
+						type: 'string',
+						default: '',
+						description: 'Small text shown below the list',
+					},
 					{
 						displayName: 'List Button Text',
 						name: 'listButton',
@@ -478,81 +613,115 @@ export class ZapZap implements INodeType {
 						default: '',
 						placeholder: 'View options',
 						description: 'Text of the button that opens the list',
-						routing: { send: { type: 'body', property: 'listButton' } },
-					},
-					{
-						displayName: 'Footer Text',
-						name: 'footerText',
-						type: 'string',
-						default: '',
-						description: 'Small text shown below the list',
-						routing: { send: { type: 'body', property: 'footerText' } },
 					},
 				],
 			},
 
-			// ========================= MESSAGE > REACT =========================
+			// ========================= SEND LOCATION / CONTACT =========================
+			{
+				displayName: 'Latitude',
+				name: 'latitude',
+				type: 'number',
+				typeOptions: { numberPrecision: 6 },
+				required: true,
+				default: 0,
+				description: 'Latitude of the location',
+				displayOptions: { show: { resource: ['message'], operation: ['sendLocation'] } },
+			},
+			{
+				displayName: 'Longitude',
+				name: 'longitude',
+				type: 'number',
+				typeOptions: { numberPrecision: 6 },
+				required: true,
+				default: 0,
+				description: 'Longitude of the location',
+				displayOptions: { show: { resource: ['message'], operation: ['sendLocation'] } },
+			},
+			{
+				displayName: 'Options',
+				name: 'locationOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['message'], operation: ['sendLocation'] } },
+				options: [
+					{ displayName: 'Address', name: 'address', type: 'string', default: '', description: 'Street address' },
+					{ displayName: 'Place Name', name: 'name', type: 'string', default: '', description: 'Name of the place' },
+				],
+			},
+			{
+				displayName: 'Full Name',
+				name: 'fullName',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: 'Maria Silva',
+				description: 'Name on the contact card',
+				displayOptions: { show: { resource: ['message'], operation: ['sendContact'] } },
+			},
+			{
+				displayName: 'Phone Numbers',
+				name: 'phoneNumber',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: '5511999990002',
+				description: 'One or more phone numbers, separated by commas',
+				displayOptions: { show: { resource: ['message'], operation: ['sendContact'] } },
+			},
+			{
+				displayName: 'Options',
+				name: 'contactOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: { show: { resource: ['message'], operation: ['sendContact'] } },
+				options: [
+					{ displayName: 'Email', name: 'email', type: 'string', placeholder: 'name@email.com', default: '' },
+					{ displayName: 'Organization', name: 'organization', type: 'string', default: '' },
+				],
+			},
+
+			// ========================= REACT =========================
 			{
 				displayName: 'Message ID',
 				name: 'id',
 				type: 'string',
 				required: true,
 				default: '',
-				placeholder: '5511991515364:2A6E2F02CE4125FDBA1B',
-				description:
-					'Message ID in the OWNER:MSGID format (e.g. 5511991515364:2A6E2F02CE4125FDBA1B). Do not use the Baileys format concatenated with the JID.',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['react'] },
-				},
-				routing: { send: { type: 'body', property: 'id' } },
+				placeholder: '5511999990003:2A6E2F02CE4125FDBA1B',
+				description: 'Message ID as OWNER:MESSAGE (e.g. 5511999990003:2A6E2F02CE4125FDBA1B). The trigger output has it as messageId.',
+				displayOptions: { show: { resource: ['message'], operation: ['react'] } },
 			},
 			{
 				displayName: 'Emoji',
 				name: 'emoji',
 				type: 'string',
-				required: true,
-				default: '',
-				placeholder: '👍',
+				default: '👍',
 				description: 'Reaction emoji. Leave empty to remove the reaction.',
-				displayOptions: {
-					show: { resource: ['message'], operation: ['react'] },
-				},
-				routing: { send: { type: 'body', property: 'emoji' } },
+				displayOptions: { show: { resource: ['message'], operation: ['react'] } },
 			},
 
-			// ========================= INSTANCE > CREATE =========================
+			// ========================= INSTANCE CREATE =========================
 			{
 				displayName: 'Name',
 				name: 'name',
 				type: 'string',
 				required: true,
 				default: '',
-				placeholder: 'my-instance',
-				description: 'Instance name. Letters, numbers, _ and - only.',
-				displayOptions: {
-					show: { resource: ['instance'], operation: ['create'] },
-				},
-				routing: { send: { type: 'body', property: 'name' } },
+				placeholder: 'MY-INSTANCE',
+				description: 'Instance name: letters, numbers, _ and - only. It is converted to uppercase.',
+				displayOptions: { show: { resource: ['instance'], operation: ['create'] } },
 			},
 			{
 				displayName: 'Options',
 				name: 'createOptions',
 				type: 'collection',
-				placeholder: 'Add option',
+				placeholder: 'Add Option',
 				default: {},
-				displayOptions: {
-					show: { resource: ['instance'], operation: ['create'] },
-				},
+				displayOptions: { show: { resource: ['instance'], operation: ['create'] } },
 				options: [
-					{
-						displayName: 'System Name',
-						name: 'systemName',
-						type: 'string',
-						default: '',
-						placeholder: 'My App',
-						description: 'System name shown on WhatsApp',
-						routing: { send: { type: 'body', property: 'systemName' } },
-					},
 					{
 						displayName: 'Metadata (JSON)',
 						name: 'metadata',
@@ -560,10 +729,449 @@ export class ZapZap implements INodeType {
 						default: '{}',
 						description:
 							'Free-form data to link the instance to your system (e.g. {"clientId":"123"}). It is returned on webhook events.',
-						routing: { send: { type: 'body', property: 'metadata', value: '={{ JSON.parse($value) }}' } },
+					},
+					{
+						displayName: 'System Name',
+						name: 'systemName',
+						type: 'string',
+						default: '',
+						placeholder: 'My App',
+						description: 'System name shown on WhatsApp',
 					},
 				],
 			},
+
+			// ========================= GROUP =========================
+			{
+				displayName: 'Include Participants',
+				name: 'getParticipants',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to include the participants of each group',
+				displayOptions: { show: { resource: ['group'], operation: ['groupList'] } },
+			},
+			{
+				displayName: 'Group ID',
+				name: 'groupjid',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: '120363000000000000@g.us',
+				description: 'Group ID, ending in @g.us',
+				displayOptions: { show: { resource: ['group'], operation: ['groupInfo'] } },
+			},
+			{
+				displayName: 'Include Invite Link',
+				name: 'getInviteLink',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to include the invite link',
+				displayOptions: { show: { resource: ['group'], operation: ['groupInfo'] } },
+			},
+			{
+				displayName: 'Group Name',
+				name: 'groupName',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: 'My Team',
+				displayOptions: { show: { resource: ['group'], operation: ['groupCreate'] } },
+			},
+			{
+				displayName: 'Participants',
+				name: 'participants',
+				type: 'string',
+				required: true,
+				default: '',
+				placeholder: '5511999990001, 5511999990002',
+				description: 'Numbers with country code, separated by commas',
+				displayOptions: { show: { resource: ['group'], operation: ['groupCreate'] } },
+			},
 		],
 	};
+
+	methods = {
+		credentialTest: {
+			async zapZapApiTest(
+				this: ICredentialTestFunctions,
+				credential: ICredentialsDecrypted,
+			): Promise<INodeCredentialTestResult> {
+				const data = (credential.data ?? {}) as IDataObject;
+				const lang = toLang(data.language);
+				let base: string;
+				try {
+					base = validateBaseUrl(String(data.baseUrl || DEFAULT_BASE_URL));
+				} catch (e) {
+					return { status: 'Error', message: (e as Error).message };
+				}
+				const call = async (path: string): Promise<{ statusCode: number; body: IDataObject | IDataObject[] }> => {
+					const r = (await this.helpers.request({
+						method: 'GET',
+						uri: `${base}${path}`,
+						json: true,
+						headers: {
+							...clientHeaders(),
+							'x-api-key': String(data.apiKey ?? ''),
+							'x-api-secret': String(data.apiSecret ?? ''),
+						},
+						timeout: 20000,
+						followRedirect: false,
+						resolveWithFullResponse: true,
+						simple: false,
+					})) as { statusCode: number; body: IDataObject | IDataObject[] };
+					return r;
+				};
+				try {
+					const acc = await call('/account');
+					if (acc.statusCode !== 200) {
+						return { status: 'Error', message: friendlyMessage(acc.statusCode, lang) };
+					}
+					const who = (acc.body as IDataObject).name || (acc.body as IDataObject).email || 'ZapZap';
+					let count = '';
+					try {
+						const inst = await call('/instances');
+						if (inst.statusCode === 200 && Array.isArray(inst.body)) count = String(inst.body.length);
+					} catch {
+						// the account call already proved the keys work
+					}
+					const text = {
+						en: `Connected as ${who}${count ? `, ${count} instance(s)` : ''}`,
+						pt: `Conectado como ${who}${count ? `, ${count} instância(s)` : ''}`,
+						es: `Conectado como ${who}${count ? `, ${count} instancia(s)` : ''}`,
+					}[lang];
+					return { status: 'OK', message: text };
+				} catch (e) {
+					return { status: 'Error', message: friendlyMessage(null, lang) };
+				}
+			},
+		},
+		loadOptions: {
+			async getInstances(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				return loadInstanceOptions(this);
+			},
+		},
+	};
+
+	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		const items = this.getInputData();
+		const out: INodeExecutionData[] = [];
+		const resource = this.getNodeParameter('resource', 0) as string;
+		const operation = this.getNodeParameter('operation', 0) as string;
+
+		for (let i = 0; i < items.length; i++) {
+			try {
+				const response = await runOperation(this, resource, operation, i);
+				const binary = await extractQrBinary(this, response, resource, operation);
+				for (const json of toItems(response)) {
+					const entry: INodeExecutionData = { json, pairedItem: { item: i } };
+					if (binary) entry.binary = binary;
+					out.push(entry);
+				}
+			} catch (error) {
+				if (this.continueOnFail()) {
+					out.push({
+						json: { error: (error as Error).message, ...describe(error) },
+						pairedItem: { item: i },
+					});
+					continue;
+				}
+				if (error instanceof NodeOperationError || (error as { context?: unknown }).context) {
+					(error as { context: IDataObject }).context = {
+						...((error as { context?: IDataObject }).context ?? {}),
+						itemIndex: i,
+					};
+				}
+				throw error;
+			}
+		}
+		return [out];
+	}
+}
+
+function describe(error: unknown): IDataObject {
+	const e = error as { description?: string; httpCode?: string };
+	const d: IDataObject = {};
+	if (e.description) d.description = e.description;
+	if (e.httpCode) d.statusCode = Number(e.httpCode);
+	return d;
+}
+
+/** Arrays become one item per element; the account API key never leaks into the output. */
+function toItems(response: unknown): IDataObject[] {
+	const clean = (o: unknown): IDataObject => {
+		if (o && typeof o === 'object' && !Array.isArray(o)) {
+			const copy = { ...(o as IDataObject) };
+			delete copy.api_key;
+			delete copy.api_secret;
+			return copy;
+		}
+		return { data: o as never };
+	};
+	if (Array.isArray(response)) return response.map(clean);
+	if (response === undefined || response === null || response === '') return [{ success: true }];
+	return [clean(response)];
+}
+
+function findQrDataUri(value: unknown, depth = 0): string | undefined {
+	if (depth > 4 || value === null || value === undefined) return undefined;
+	if (typeof value === 'string') return /^data:image\/[a-z]+;base64,/i.test(value) ? value : undefined;
+	if (typeof value === 'object') {
+		for (const v of Object.values(value as IDataObject)) {
+			const found = findQrDataUri(v, depth + 1);
+			if (found) return found;
+		}
+	}
+	return undefined;
+}
+
+async function extractQrBinary(
+	ctx: IExecuteFunctions,
+	response: unknown,
+	resource: string,
+	operation: string,
+): Promise<INodeExecutionData['binary'] | undefined> {
+	if (resource !== 'instance' || operation !== 'getQrCode') return undefined;
+	const uri = findQrDataUri(response);
+	if (!uri) return undefined;
+	const [, mime, b64] = /^data:(image\/[a-z]+);base64,(.*)$/is.exec(uri) ?? [];
+	if (!b64) return undefined;
+	const ext = mime.split('/')[1];
+	return { qrcode: await ctx.helpers.prepareBinaryData(Buffer.from(b64, 'base64'), `qrcode.${ext}`, mime) };
+}
+
+function withTyping(body: IDataObject, opts: IDataObject): void {
+	if (opts.typing === false) body.digitando = false;
+}
+
+function copyOptions(body: IDataObject, opts: IDataObject, keys: string[]): void {
+	for (const k of keys) {
+		const v = opts[k];
+		if (v !== undefined && v !== '' && !(k === 'delay' && !v)) body[k] = v as never;
+	}
+}
+
+async function runOperation(ctx: IExecuteFunctions, resource: string, operation: string, i: number): Promise<unknown> {
+	const getId = (): string => requireValue(ctx, ctx.getNodeParameter('instanceId', i, '') as string, 'Instance', i);
+	const getNumber = async (): Promise<string> => {
+		const cc = String((await ctx.getCredentials('zapZapApi')).defaultCountryCode ?? '');
+		const n = normalizeNumber(ctx.getNodeParameter('number', i, '') as string, cc);
+		if (!n) throw new NodeOperationError(ctx.getNode(), 'Number is required', { itemIndex: i });
+		return n;
+	};
+	const get = (name: string): string => ctx.getNodeParameter(name, i, '') as string;
+	const opts = (name: string): IDataObject => ctx.getNodeParameter(name, i, {}) as IDataObject;
+
+	// ---------- Custom ----------
+	if (resource === 'custom') {
+		const method = get('method') as 'GET' | 'POST' | 'PUT' | 'DELETE';
+		const path = requireValue(ctx, get('path'), 'Path', i);
+		const bodyRaw = method === 'POST' || method === 'PUT' ? parseJsonParam(ctx, ctx.getNodeParameter('customBody', i, '{}'), 'Body', i) : undefined;
+		const qsRaw = parseJsonParam(ctx, ctx.getNodeParameter('customQuery', i, '{}'), 'Query', i);
+		return zapZapRequest(ctx, {
+			method,
+			path,
+			body: bodyRaw && typeof bodyRaw === 'object' && Object.keys(bodyRaw as object).length ? (bodyRaw as IDataObject) : undefined,
+			qs: qsRaw && typeof qsRaw === 'object' && Object.keys(qsRaw as object).length ? (qsRaw as IDataObject) : undefined,
+		});
+	}
+
+	// ---------- Account ----------
+	if (resource === 'account') {
+		return zapZapRequest(ctx, { method: 'GET', path: '/account' });
+	}
+
+	// ---------- Instance ----------
+	if (resource === 'instance') {
+		switch (operation) {
+			case 'list':
+				return zapZapRequest(ctx, { method: 'GET', path: '/instances' });
+			case 'create': {
+				const name = requireValue(ctx, get('name'), 'Name', i).toUpperCase();
+				if (!/^[A-Z0-9_-]+$/.test(name)) {
+					throw new NodeOperationError(ctx.getNode(), 'Name can only have letters, numbers, _ and -', {
+						itemIndex: i,
+					});
+				}
+				const o = opts('createOptions');
+				const body: IDataObject = { name };
+				if (o.systemName) body.systemName = o.systemName;
+				if (o.metadata && o.metadata !== '{}') {
+					const meta = parseJsonParam(ctx, o.metadata, 'Metadata', i);
+					if (meta && typeof meta === 'object' && !Array.isArray(meta) && Object.keys(meta).length) {
+						body.metadata = meta as IDataObject;
+					}
+				}
+				return zapZapRequest(ctx, { method: 'POST', path: '/instances', body });
+			}
+			case 'get':
+				return zapZapRequest(ctx, { method: 'GET', path: `/instances/${enc(getId())}` });
+			case 'getStatus':
+				return zapZapRequest(ctx, { method: 'GET', path: `/${enc(getId())}/instance/status` });
+			case 'getQrCode':
+				return zapZapRequest(ctx, { method: 'GET', path: `/instances/${enc(getId())}/qrcode` });
+		}
+	}
+
+	// ---------- Group ----------
+	if (resource === 'group') {
+		const id = getId();
+		switch (operation) {
+			case 'groupList': {
+				const withParticipants = ctx.getNodeParameter('getParticipants', i, false) as boolean;
+				return withParticipants
+					? zapZapRequest(ctx, { method: 'POST', path: `/${enc(id)}/group/list`, body: { getParticipants: true } })
+					: zapZapRequest(ctx, { method: 'GET', path: `/${enc(id)}/group/list` });
+			}
+			case 'groupInfo':
+				return zapZapRequest(ctx, {
+					method: 'POST',
+					path: `/${enc(id)}/group/info`,
+					body: {
+						groupjid: requireValue(ctx, get('groupjid'), 'Group ID', i),
+						getInviteLink: ctx.getNodeParameter('getInviteLink', i, false) as boolean,
+					},
+				});
+			case 'groupCreate': {
+				const participants = get('participants')
+					.split(',')
+					.map((p) => normalizeNumber(p))
+					.filter(Boolean);
+				if (!participants.length) {
+					throw new NodeOperationError(ctx.getNode(), 'Add at least one participant', { itemIndex: i });
+				}
+				return zapZapRequest(ctx, {
+					method: 'POST',
+					path: `/${enc(id)}/group/create`,
+					body: { name: requireValue(ctx, get('groupName'), 'Group Name', i), participants },
+				});
+			}
+		}
+	}
+
+	// ---------- Chat ----------
+	if (resource === 'chat' && operation === 'markRead') {
+		return zapZapRequest(ctx, {
+			method: 'POST',
+			path: `/${enc(getId())}/chat/read`,
+			body: { number: await getNumber() },
+		});
+	}
+
+	// ---------- Message ----------
+	if (resource === 'message') {
+		const id = getId();
+		const base = `/${enc(id)}`;
+		switch (operation) {
+			case 'sendText': {
+				const o = opts('textOptions');
+				const body: IDataObject = {
+					number: await getNumber(),
+					text: requireValue(ctx, get('text'), 'Text', i),
+				};
+				copyOptions(body, o, ['mentions', 'replyid', 'delay']);
+				withTyping(body, o);
+				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/text`, body });
+			}
+			case 'sendMedia': {
+				const o = opts('mediaOptions');
+				const type = get('type') || 'image';
+				const body: IDataObject = { number: await getNumber(), type };
+				if ((ctx.getNodeParameter('mediaSource', i, 'url') as string) === 'binary') {
+					const prop = requireValue(ctx, get('binaryPropertyName') || 'data', 'Input Binary Field', i);
+					const meta = ctx.helpers.assertBinaryData(i, prop);
+					const buffer = await ctx.helpers.getBinaryDataBuffer(i, prop);
+					if (buffer.length > MAX_BINARY_BYTES) {
+						throw new NodeOperationError(
+							ctx.getNode(),
+							'The file is too large to send as binary data (limit about 1 MB). Upload it somewhere and use the URL source.',
+							{ itemIndex: i },
+						);
+					}
+					body.file = `data:${meta.mimeType || 'application/octet-stream'};base64,${buffer.toString('base64')}`;
+					if (type === 'document' && !o.docName && meta.fileName) o.docName = meta.fileName;
+				} else {
+					const url = requireValue(ctx, get('file'), 'File URL', i);
+					try {
+						validateHttpUrl(url);
+					} catch (e) {
+						throw new NodeOperationError(ctx.getNode(), `File URL: ${(e as Error).message}`, { itemIndex: i });
+					}
+					body.file = url;
+				}
+				if (type === 'document' && !o.docName) {
+					const fromUrl = String(body.file).split('?')[0].split('/').pop();
+					if (fromUrl && !String(body.file).startsWith('data:')) o.docName = fromUrl;
+				}
+				copyOptions(body, o, ['text', 'docName', 'mentions', 'delay']);
+				withTyping(body, o);
+				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/media`, body });
+			}
+			case 'sendInteractive': {
+				const kind = get('interactiveType') || 'poll';
+				const body: IDataObject = {
+					number: await getNumber(),
+					text: requireValue(ctx, get('interactiveText'), 'Text', i),
+				};
+				if (kind === 'poll') {
+					const choices = parseJsonParam(ctx, ctx.getNodeParameter('pollChoices', i, '[]'), 'Choices', i);
+					if (!Array.isArray(choices) || choices.length < 2) {
+						throw new NodeOperationError(ctx.getNode(), 'A poll needs at least 2 choices', { itemIndex: i });
+					}
+					body.choices = choices.map(String);
+					body.selectableCount = ctx.getNodeParameter('selectableCount', i, 1) as number;
+				} else if (kind === 'buttons') {
+					const buttons = parseJsonParam(ctx, ctx.getNodeParameter('buttonsJson', i, '[]'), 'Buttons', i);
+					if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
+						throw new NodeOperationError(ctx.getNode(), 'Buttons must be an array of 1 to 3 items', {
+							itemIndex: i,
+						});
+					}
+					body.buttons = buttons as IDataObject[];
+					copyOptions(body, opts('buttonsOptions'), ['image', 'footer']);
+				} else {
+					const choices = parseJsonParam(ctx, ctx.getNodeParameter('listChoices', i, '[]'), 'Choices', i);
+					if (!Array.isArray(choices) || !choices.length) {
+						throw new NodeOperationError(ctx.getNode(), 'A list needs at least 1 choice', { itemIndex: i });
+					}
+					body.choices = choices.map(String);
+					copyOptions(body, opts('listOptions'), ['listButton', 'footerText']);
+				}
+				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/${kind}`, body });
+			}
+			case 'sendLocation': {
+				const body: IDataObject = {
+					number: await getNumber(),
+					latitude: ctx.getNodeParameter('latitude', i) as number,
+					longitude: ctx.getNodeParameter('longitude', i) as number,
+				};
+				copyOptions(body, opts('locationOptions'), ['name', 'address']);
+				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/location`, body });
+			}
+			case 'sendContact': {
+				const body: IDataObject = {
+					number: await getNumber(),
+					fullName: requireValue(ctx, get('fullName'), 'Full Name', i),
+					phoneNumber: requireValue(ctx, get('phoneNumber'), 'Phone Numbers', i),
+				};
+				copyOptions(body, opts('contactOptions'), ['organization', 'email']);
+				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/contact`, body });
+			}
+			case 'react':
+				return zapZapRequest(ctx, {
+					method: 'POST',
+					path: `${base}/message/react`,
+					body: {
+						number: await getNumber(),
+						id: requireValue(ctx, get('id'), 'Message ID', i),
+						emoji: get('emoji'),
+					},
+				});
+		}
+	}
+
+	throw new NodeOperationError(ctx.getNode(), `Unknown operation: ${resource}/${operation}`, { itemIndex: i });
+}
+
+function enc(v: string): string {
+	return encodeURIComponent(v);
 }

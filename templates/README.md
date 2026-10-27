@@ -4,7 +4,7 @@ Languages: English | [Português](README.pt-BR.md) | [Español](README.es.md)
 
 Importable n8n workflows that use the [ZapZap community nodes](../README.md). Install `n8n-nodes-zapzap` first, then in n8n choose **Workflows > Import from file** and pick a JSON file.
 
-After importing: select your **ZapZap API** credential on each ZapZap node and replace `YOUR_INSTANCE_ID` with the ID of your WhatsApp instance. Numbers use digits only with country code (`5511999999999`).
+After importing: select your **ZapZap API** credential on each ZapZap node and pick your WhatsApp instance from the list (replace `YOUR_INSTANCE_ID`). Numbers use digits only with country code (`5511999990001`).
 
 | File | What it does | Starts with |
 |---|---|---|

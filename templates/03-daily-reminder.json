@@ -41,7 +41,7 @@
         "resource": "message",
         "operation": "sendText",
         "instanceId": "YOUR_INSTANCE_ID",
-        "number": "5511999999999",
+        "number": "5511999990001",
         "text": "Reminder: check today's schedule."
       },
       "id": "send-reminder",

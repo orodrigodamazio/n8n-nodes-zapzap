@@ -1,14 +1,76 @@
-import {
+import { createHmac, timingSafeEqual } from 'crypto';
+import type {
 	IDataObject,
 	IHookFunctions,
+	ILoadOptionsFunctions,
+	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
 	IWebhookFunctions,
 	IWebhookResponseData,
-	JsonObject,
-	NodeApiError,
-	NodeOperationError,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
+import { getBaseUrl, loadInstanceOptions, zapZapRequest } from '../shared/client';
+
+export const SIGNATURE_TOLERANCE_SEC = 300;
+const MAX_SEEN = 500;
+
+/** Checks `X-ZapZap-Signature: t=<unix>,v1=<hmac>` over `${t}.${rawBody}`. Constant time. */
+export function verifySignature(
+	secret: string,
+	rawBody: string | Buffer,
+	header: string,
+	nowSec = Math.floor(Date.now() / 1000),
+): 'ok' | 'bad' | 'stale' {
+	const parts: Record<string, string> = {};
+	for (const kv of String(header || '').split(',')) {
+		const idx = kv.indexOf('=');
+		if (idx > 0) parts[kv.slice(0, idx).trim()] = kv.slice(idx + 1).trim();
+	}
+	const t = Number(parts.t);
+	const v1 = parts.v1;
+	if (!Number.isFinite(t) || !v1) return 'bad';
+	const expected = createHmac('sha256', secret).update(`${t}.`).update(rawBody).digest('hex');
+	const a = Buffer.from(expected);
+	const b = Buffer.from(v1);
+	if (a.length !== b.length || !timingSafeEqual(a, b)) return 'bad';
+	if (Math.abs(nowSec - t) > SIGNATURE_TOLERANCE_SEC) return 'stale';
+	return 'ok';
+}
+
+/** Adds easy-to-use top-level fields (from, text, type, time...) without removing the original payload. */
+export function quickFields(body: IDataObject): IDataObject {
+	const data = (body.data && typeof body.data === 'object' ? body.data : {}) as IDataObject;
+	const msg = (data.message && typeof data.message === 'object' ? data.message : {}) as IDataObject;
+	const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v));
+	const chatId = str(msg.chatid || msg.chatId);
+	const sender = str(msg.sender) || chatId;
+	const digits = (j: string): string => j.split('@')[0].split(':')[0];
+	let time: string | undefined;
+	const ts = Number(msg.messageTimestamp);
+	if (Number.isFinite(ts) && ts > 0) {
+		const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+		if (!Number.isNaN(d.getTime())) time = d.toISOString();
+	}
+	const out: IDataObject = {
+		event: str(body.event),
+		instanceId: str(body.instance_id),
+		instanceName: str(body.instance_name),
+	};
+	if (Object.keys(msg).length) {
+		Object.assign(out, {
+			from: digits(sender || chatId),
+			chatId,
+			isGroup: chatId.endsWith('@g.us') || msg.isGroup === true,
+			fromMe: msg.fromMe === true,
+			text: str(msg.text ?? msg.body ?? (msg.content as IDataObject | undefined)?.text),
+			type: str(msg.messageType ?? msg.type),
+			messageId: str(msg.id ?? msg.messageid),
+			time,
+		});
+	}
+	return out;
+}
 
 export class ZapZapTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -17,8 +79,8 @@ export class ZapZapTrigger implements INodeType {
 		icon: 'file:zapzap.svg',
 		group: ['trigger'],
 		version: 1,
-		subtitle: '=Events: {{$parameter["events"].length ? $parameter["events"].join(", ") : "all"}}',
-		description: 'Receive events from a ZapZap instance (messages, connection and more) via webhook',
+		subtitle: '=Events: {{$parameter["events"].length ? $parameter["events"].join(", ") : "main"}}',
+		description: 'Start a workflow when a WhatsApp message or event arrives on a ZapZap instance',
 		defaults: {
 			name: 'ZapZap Trigger',
 		},
@@ -41,32 +103,30 @@ export class ZapZapTrigger implements INodeType {
 		properties: [
 			{
 				displayName:
-					'The webhook is registered on your instance automatically when you activate the workflow, and removed when you deactivate it. Just set the Instance ID below. In production n8n needs a public HTTPS domain.',
+					'Pick the instance and activate the workflow. The webhook is registered on that instance automatically and removed when you deactivate it. n8n needs a public HTTPS address. While you test with "Listen for test event", the instance webhook points to the test URL and is restored when you stop.',
 				name: 'notice',
 				type: 'notice',
 				default: '',
 			},
 			{
-				displayName: 'Instance ID',
+				displayName: 'Instance Name or ID',
 				name: 'instanceId',
-				type: 'string',
+				type: 'options',
 				required: true,
 				default: '',
-				placeholder: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+				typeOptions: { loadOptionsMethod: 'getInstances' },
 				description:
-					'Identifier of the WhatsApp instance whose webhook will be registered (the UUID from creating or listing instances)',
-				displayOptions: {
-					show: { manualSetup: [false] },
-				},
+					'WhatsApp instance to listen to. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				displayOptions: { show: { manualSetup: [false] } },
 			},
 			{
 				displayName: 'Events',
 				name: 'events',
 				type: 'multiOptions',
-				default: [],
-				description:
-					'Events that trigger the workflow. Empty means the main events (messages, connection, status).',
+				default: ['messages'],
+				description: 'Which events start the workflow. Leave empty for the main ones (messages, connection and status).',
 				options: [
+					{ name: 'Calls', value: 'call', description: 'Incoming audio or video calls' },
 					{ name: 'Chats', value: 'chats', description: 'Chat created, updated or removed' },
 					{ name: 'Connection', value: 'connection', description: 'Connection state changed' },
 					{ name: 'Contacts', value: 'contacts', description: 'Contact created or updated' },
@@ -77,138 +137,190 @@ export class ZapZapTrigger implements INodeType {
 				],
 			},
 			{
+				displayName: 'Options',
+				name: 'options',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				options: [
+					{
+						displayName: 'Add Quick Fields',
+						name: 'quickFields',
+						type: 'boolean',
+						default: true,
+						description:
+							'Whether to add easy fields at the top of the output: from, text, type, time, chatId, isGroup, fromMe, messageId. The full payload is kept.',
+					},
+					{
+						displayName: 'Ignore My Own Messages',
+						name: 'ignoreOwn',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to skip messages sent by your own number. Turn on for auto replies so the workflow does not answer itself.',
+					},
+					{
+						displayName: 'Skip Repeated Deliveries',
+						name: 'dedupe',
+						type: 'boolean',
+						default: true,
+						description: 'Whether to ignore an event that ZapZap re-sends after a retry (same delivery ID)',
+					},
+					{
+						displayName: 'Webhook Secret',
+						name: 'webhookSecret',
+						type: 'string',
+						typeOptions: { password: true },
+						default: '',
+						description:
+							'Only for "Set Webhook Manually". Paste the secret shown in the ZapZap webhook settings so signatures are checked. With automatic setup this is handled for you.',
+					},
+				],
+			},
+			{
 				displayName: 'Set Webhook Manually',
 				name: 'manualSetup',
 				type: 'boolean',
 				default: false,
 				description:
-					'Whether to skip auto-registration and point the instance webhook yourself, in the ZapZap panel or via the API. Leave off to let this node register and remove the webhook automatically.',
+					'Whether to skip auto-registration and point the instance webhook yourself, in the ZapZap panel. Without a secret, incoming calls are not verified.',
 			},
 		],
 	};
 
+	methods = {
+		loadOptions: {
+			async getInstances(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				return loadInstanceOptions(this);
+			},
+		},
+	};
+
 	webhookMethods = {
 		default: {
-			// Check whether the instance webhook already points to this n8n URL.
+			// True when the instance webhook already points to this n8n URL.
 			async checkExists(this: IHookFunctions): Promise<boolean> {
-				const manualSetup = this.getNodeParameter('manualSetup', false) as boolean;
-				if (manualSetup) {
-					// Manual setup: the node does not manage the webhook, so there is nothing to create.
-					return true;
-				}
-
+				if (this.getNodeParameter('manualSetup', false) as boolean) return true;
 				const instanceId = ((this.getNodeParameter('instanceId', '') as string) || '').trim();
-				if (!instanceId) {
-					// Without an Instance ID there is nothing to check: force create() to raise a clear error.
-					return false;
-				}
-
+				if (!instanceId) return false;
 				const webhookUrl = this.getNodeWebhookUrl('default');
-				const credentials = await this.getCredentials('zapZapApi');
-				const baseUrl = ((credentials.baseUrl as string) || 'https://api.zapzapapi.com/api/v1').replace(/\/+$/, '');
-
 				try {
-					const current = (await this.helpers.httpRequestWithAuthentication.call(this, 'zapZapApi', {
+					const current = await zapZapRequest<IDataObject>(this, {
 						method: 'GET',
-						url: `${baseUrl}/instances/${instanceId}/webhook`,
-						json: true,
-					})) as IDataObject;
-					return current.webhook_url === webhookUrl;
+						path: `/instances/${encodeURIComponent(instanceId)}/webhook`,
+					});
+					if (current?.webhook_url === webhookUrl) {
+						const data = this.getWorkflowStaticData('node');
+						if (typeof current.webhook_secret === 'string') data.webhookSecret = current.webhook_secret;
+						return true;
+					}
 				} catch {
-					// Lookup failed: let create() try to register it.
-					return false;
+					// Lookup failed: let create() try, it raises a clear error if it still fails.
 				}
+				return false;
 			},
 
-			// Register the instance webhook pointing to this n8n URL (when the workflow is activated).
 			async create(this: IHookFunctions): Promise<boolean> {
-				const manualSetup = this.getNodeParameter('manualSetup', false) as boolean;
-				if (manualSetup) {
-					return true;
-				}
-
+				if (this.getNodeParameter('manualSetup', false) as boolean) return true;
 				const instanceId = ((this.getNodeParameter('instanceId', '') as string) || '').trim();
 				if (!instanceId) {
 					throw new NodeOperationError(
 						this.getNode(),
-						'Set the Instance ID to register the webhook automatically, or turn on "Set Webhook Manually".',
+						'Pick an instance to register the webhook automatically, or turn on "Set Webhook Manually".',
 					);
 				}
-
 				const webhookUrl = this.getNodeWebhookUrl('default');
-				if (!webhookUrl) {
-					throw new NodeOperationError(this.getNode(), 'Could not obtain the n8n webhook URL.');
-				}
-
-				const events = this.getNodeParameter('events', []) as string[];
-				const credentials = await this.getCredentials('zapZapApi');
-				const baseUrl = ((credentials.baseUrl as string) || 'https://api.zapzapapi.com/api/v1').replace(/\/+$/, '');
-
-				try {
-					await this.helpers.httpRequestWithAuthentication.call(this, 'zapZapApi', {
-						method: 'PUT',
-						url: `${baseUrl}/instances/${instanceId}/webhook`,
-						body: { webhook_url: webhookUrl, events },
-						json: true,
-					});
-				} catch (error) {
-					throw new NodeApiError(this.getNode(), error as JsonObject, {
-						message: 'Could not register the webhook automatically on ZapZap.',
+				if (!webhookUrl) throw new NodeOperationError(this.getNode(), 'Could not obtain the n8n webhook URL.');
+				if (!webhookUrl.startsWith('https://')) {
+					throw new NodeOperationError(this.getNode(), 'ZapZap needs a public HTTPS webhook URL.', {
 						description:
-							'ZapZap requires a public HTTPS URL (anti-SSRF protection). In production n8n has an HTTPS domain and registration works. On a local setup (http/localhost) the URL is rejected: in that case point the webhook from the app.zapzapapi.com panel, or turn on "Set Webhook Manually".',
+							'n8n is using ' +
+							webhookUrl.split('/webhook')[0] +
+							'. Set WEBHOOK_URL to your public HTTPS address, use a tunnel, or turn on "Set Webhook Manually".',
 					});
 				}
-
+				const events = this.getNodeParameter('events', []) as string[];
+				const res = await zapZapRequest<IDataObject>(this, {
+					method: 'PUT',
+					path: `/instances/${encodeURIComponent(instanceId)}/webhook`,
+					body: { webhook_url: webhookUrl, enabled: true, events },
+				});
+				const data = this.getWorkflowStaticData('node');
+				if (res && typeof res.webhook_secret === 'string') data.webhookSecret = res.webhook_secret;
 				return true;
 			},
 
-			// Remove the instance webhook (when the workflow is deactivated).
+			// Removes the registration only if it still points to this workflow.
 			async delete(this: IHookFunctions): Promise<boolean> {
-				const manualSetup = this.getNodeParameter('manualSetup', false) as boolean;
-				if (manualSetup) {
-					return true;
-				}
-
+				if (this.getNodeParameter('manualSetup', false) as boolean) return true;
 				const instanceId = ((this.getNodeParameter('instanceId', '') as string) || '').trim();
-				if (!instanceId) {
-					return true;
-				}
-
-				const credentials = await this.getCredentials('zapZapApi');
-				const baseUrl = ((credentials.baseUrl as string) || 'https://api.zapzapapi.com/api/v1').replace(/\/+$/, '');
-
+				if (!instanceId) return true;
 				try {
-					await this.helpers.httpRequestWithAuthentication.call(this, 'zapZapApi', {
-						method: 'PUT',
-						url: `${baseUrl}/instances/${instanceId}/webhook`,
-						body: { webhook_url: '' },
-						json: true,
-					});
+					await getBaseUrl(this);
+					const path = `/instances/${encodeURIComponent(instanceId)}/webhook`;
+					const current = await zapZapRequest<IDataObject>(this, { method: 'GET', path });
+					if (current?.webhook_url === this.getNodeWebhookUrl('default')) {
+						await zapZapRequest(this, { method: 'PUT', path, body: { webhook_url: '' } });
+					}
 				} catch {
-					// Best effort: if the API refuses to clear the URL, ignore it.
+					// Best effort: the workflow is being deactivated anyway.
 				}
-
+				const data = this.getWorkflowStaticData('node');
+				delete data.webhookSecret;
 				return true;
 			},
 		},
 	};
 
 	async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-		const body = this.getBodyData() as IDataObject;
-		const selected = this.getNodeParameter('events', []) as string[];
-		const event = body.event as string | undefined;
+		const req = this.getRequestObject();
+		const res = this.getResponseObject();
+		const reject = (code: number, error: string): IWebhookResponseData => {
+			res.status(code).json({ error });
+			return { noWebhookResponse: true };
+		};
 
-		// Event filter: if the user selected events and this one is not in the list,
-		// reply 200 (so ZapZap does not disable the webhook) but do not trigger the workflow.
-		if (selected.length > 0 && event && !selected.includes(event)) {
-			return {
-				webhookResponse: { ok: true },
-			};
+		// Signature check (HMAC-SHA256 with timestamp, replay window of 5 minutes).
+		const data = this.getWorkflowStaticData('node');
+		const options = this.getNodeParameter('options', {}) as IDataObject;
+		const secret = String(options.webhookSecret || data.webhookSecret || '');
+		if (secret) {
+			const header = String(req.headers['x-zapzap-signature'] ?? '');
+			const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
+			if (!header) return reject(401, 'missing signature');
+			if (raw) {
+				const verdict = verifySignature(secret, raw, header);
+				if (verdict === 'bad') return reject(401, 'invalid signature');
+				if (verdict === 'stale') return reject(401, 'signature too old');
+			}
 		}
 
+		const body = this.getBodyData() as IDataObject;
+		if (!body || typeof body !== 'object' || Array.isArray(body)) {
+			return reject(400, 'invalid payload');
+		}
+
+		// Event filter (the server already filters; this protects manual setups).
+		const selected = this.getNodeParameter('events', []) as string[];
+		const event = typeof body.event === 'string' ? body.event : undefined;
+		const ack = { webhookResponse: { ok: true } };
+		if (selected.length > 0 && event && !selected.includes(event)) return ack;
+
+		// Retries from ZapZap carry the same delivery_id.
+		if (options.dedupe !== false && typeof body.delivery_id === 'string') {
+			const seen = (data.seen as string[] | undefined) ?? [];
+			if (seen.includes(body.delivery_id)) return ack;
+			seen.push(body.delivery_id);
+			data.seen = seen.slice(-MAX_SEEN);
+		}
+
+		const quick = quickFields(body);
+		if (options.ignoreOwn === true && quick.fromMe === true) return ack;
+
+		const json: IDataObject = options.quickFields === false ? body : { ...quick, ...body };
 		return {
 			webhookResponse: { ok: true },
-			workflowData: [this.helpers.returnJsonArray(body)],
+			workflowData: [[{ json }]],
 		};
 	}
 }

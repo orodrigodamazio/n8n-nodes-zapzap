@@ -31,7 +31,7 @@
       "parameters": {
         "resource": "instance",
         "operation": "create",
-        "name": "my-first-instance"
+        "name": "MY-FIRST-INSTANCE"
       },
       "id": "create-instance",
       "name": "Create instance",

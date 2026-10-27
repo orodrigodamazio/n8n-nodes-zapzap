@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-zapzap",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "n8n community nodes for the ZapZap API: send WhatsApp messages, media, polls, buttons and lists, react to messages, manage instances and receive real-time events.",
   "keywords": [
     "n8n-community-node-package",
@@ -31,18 +31,20 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "tsc && gulp build:icons && gulp build:translations",
+    "build": "tsc && gulp build:icons && gulp build:translations && gulp build:codex",
     "dev": "tsc --watch",
     "format": "prettier nodes credentials --write",
     "lint": "eslint nodes credentials package.json",
     "lintfix": "eslint nodes credentials package.json --fix",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && node --test --test-concurrency=1 test/action.test.js test/trigger.test.js"
   },
   "files": [
     "dist",
     "README.md",
     "README.pt-BR.md",
     "README.es.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "n8n": {

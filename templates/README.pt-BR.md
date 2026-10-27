@@ -2,7 +2,7 @@
 
 Fluxos do n8n prontos para importar que usam os [community nodes da ZapZap](../README.pt-BR.md). Instale antes o `n8n-nodes-zapzap` e, no n8n, escolha **Workflows > Import from file** com um dos arquivos JSON.
 
-Depois de importar: selecione sua credencial **ZapZap API** em cada node ZapZap e troque `YOUR_INSTANCE_ID` pelo ID da sua instância de WhatsApp. Números levam só dígitos com DDI (`5511999999999`).
+Depois de importar: selecione sua credencial **ZapZap API** em cada node ZapZap e escolha sua instância de WhatsApp na lista (troque `YOUR_INSTANCE_ID`). Números levam só dígitos com DDI (`5511999990001`).
 
 | Arquivo | O que faz | Começa com |
 |---|---|---|
