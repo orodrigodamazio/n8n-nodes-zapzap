@@ -1,7 +1,4 @@
 import type {
-	ICredentialsDecrypted,
-	ICredentialTestFunctions,
-	INodeCredentialTestResult,
 	IDataObject,
 	IExecuteFunctions,
 	ILoadOptionsFunctions,
@@ -12,12 +9,9 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import {
-	clientHeaders,
-	DEFAULT_BASE_URL,
-	friendlyMessage,
+	getLang,
 	loadInstanceOptions,
-	toLang,
-	validateBaseUrl,
+	msg,
 	validateHttpUrl,
 	normalizeNumber,
 	parseJsonParam,
@@ -49,7 +43,6 @@ export class ZapZap implements INodeType {
 			{
 				name: 'zapZapApi',
 				required: true,
-				testedBy: 'zapZapApiTest',
 			},
 		],
 		properties: [
@@ -267,7 +260,7 @@ export class ZapZap implements INodeType {
 				name: 'customBody',
 				type: 'json',
 				default: '{}',
-				description: 'JSON body for POST and PUT',
+				description: 'JSON body for POST and PUT. Example: {"number":"5511999990001","text":"Hi"}.',
 				displayOptions: { show: { resource: ['custom'], method: ['POST', 'PUT'] } },
 			},
 			{
@@ -275,7 +268,7 @@ export class ZapZap implements INodeType {
 				name: 'customQuery',
 				type: 'json',
 				default: '{}',
-				description: 'Query string parameters as JSON',
+				description: 'Query string parameters as JSON. Example: {"limit":10}.',
 				displayOptions: { show: { resource: ['custom'] } },
 			},
 
@@ -288,7 +281,7 @@ export class ZapZap implements INodeType {
 				default: '',
 				typeOptions: { loadOptionsMethod: 'getInstances' },
 				description:
-					'WhatsApp instance to use. Pick it from the list, or set it with an expression. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					'The connected WhatsApp number to use (called an instance). If the list is empty, create and connect one in app.zapzapapi.com first. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				displayOptions: { show: { resource: MESSAGE_RESOURCES } },
 			},
 			{
@@ -299,7 +292,7 @@ export class ZapZap implements INodeType {
 				default: '',
 				typeOptions: { loadOptionsMethod: 'getInstances' },
 				description:
-					'WhatsApp instance to use. Pick it from the list, or set it with an expression. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					'The connected WhatsApp number to use (called an instance). If the list is empty, create and connect one in app.zapzapapi.com first. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				displayOptions: {
 					show: { resource: ['instance'], operation: ['get', 'getStatus', 'getQrCode'] },
 				},
@@ -354,11 +347,11 @@ export class ZapZap implements INodeType {
 				displayOptions: { show: { resource: ['message'], operation: ['sendText'] } },
 				options: [
 					{
-						displayName: 'Delay (Ms)',
+						displayName: 'Delay (Milliseconds)',
 						name: 'delay',
 						type: 'number',
 						default: 0,
-						description: 'Wait this long before sending, in milliseconds',
+						description: 'Wait this long before sending. 1000 means 1 second.',
 					},
 					{
 						displayName: 'Mentions',
@@ -396,22 +389,26 @@ export class ZapZap implements INodeType {
 				description: 'Type of media to send',
 				displayOptions: { show: { resource: ['message'], operation: ['sendMedia'] } },
 				options: [
-					{ name: 'Audio (File)', value: 'audio', description: 'Audio as a file (MP3, OGG, WAV)' },
+					{ name: 'Audio File', value: 'audio', description: 'Music or a recording sent as a file (MP3, OGG, WAV)' },
 					{ name: 'Document', value: 'document', description: 'Document (PDF, DOCX, XLSX and similar)' },
 					{ name: 'Image', value: 'image', description: 'Image (JPG, PNG, GIF, WebP)' },
 					{
-						name: 'Native Audio (Myaudio)',
-						value: 'myaudio',
-						description: 'WhatsApp native audio (OGG/Opus), similar to a voice note',
+						name: 'Round Video',
+						value: 'ptv',
+						description: 'A short video shown inside a circle. Ignores the caption.',
 					},
 					{ name: 'Sticker', value: 'sticker', description: 'Sticker (WebP)' },
 					{ name: 'Video', value: 'video', description: 'Video (MP4, AVI, MOV)' },
 					{
-						name: 'Video Note (PTV)',
-						value: 'ptv',
-						description: 'Round video note. Always circular and ignores the caption.',
+						name: 'Voice Message',
+						value: 'ptt',
+						description: 'Appears as a recorded voice message, with the microphone icon. Best for talking to a person.',
 					},
-					{ name: 'Voice (PTT)', value: 'ptt', description: 'Voice note (microphone bubble)' },
+					{
+						name: 'Voice Message (OGG/Opus File)',
+						value: 'myaudio',
+						description: 'Advanced. A voice message made from an OGG/Opus file. Most people should use Voice Message',
+					},
 				],
 			},
 			{
@@ -467,11 +464,11 @@ export class ZapZap implements INodeType {
 						description: 'Caption (image and video only). Ignored for video notes.',
 					},
 					{
-						displayName: 'Delay (Ms)',
+						displayName: 'Delay (Milliseconds)',
 						name: 'delay',
 						type: 'number',
 						default: 0,
-						description: 'Wait this long before sending, in milliseconds',
+						description: 'Wait this long before sending. 1000 means 1 second.',
 					},
 					{
 						displayName: 'Document Name',
@@ -531,7 +528,7 @@ export class ZapZap implements INodeType {
 				type: 'json',
 				required: true,
 				default: '["Option 1", "Option 2"]',
-				description: 'Array of strings with the poll options',
+				description: 'One option per item, at least 2. Example: ["Great", "Good", "Bad"].',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['poll'] },
 				},
@@ -552,7 +549,9 @@ export class ZapZap implements INodeType {
 				type: 'json',
 				required: true,
 				default: '[{"text":"Yes","id":"yes"},{"text":"Our site","url":"https://example.com"}]',
-				description: 'Up to 3 buttons. Each button has a text and one action: a quick reply, a link, a phone number to call, or a code to copy. Keep the example shape and change the values.',
+				// JSON examples below must keep lowercase keys.
+				// eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-id, n8n-nodes-base/node-param-description-miscased-url
+				description: 'Up to 3 buttons. Quick reply: {"text":"Yes","id":"yes"}. Link: {"text":"Our site","url":"https://example.com"}. Keep the example shape and change the values.',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['buttons'] },
 				},
@@ -584,7 +583,8 @@ export class ZapZap implements INodeType {
 				type: 'json',
 				required: true,
 				default: '["[Products]", "T-shirt|p1|$ 50", "Pants|p2|$ 120"]',
-				description: 'Use "[Section]" for a header and "Label|ID|description" for each selectable item',
+				description:
+						'Example: ["[Products]", "T-shirt|p1|$ 50"]. A name in [brackets] starts a section. Each item is Name|code|description.',
 				displayOptions: {
 					show: { resource: ['message'], operation: ['sendInteractive'], interactiveType: ['list'] },
 				},
@@ -691,7 +691,7 @@ export class ZapZap implements INodeType {
 				required: true,
 				default: '',
 				placeholder: '5511999990003:2A6E2F02CE4125FDBA1B',
-				description: 'Message ID as OWNER:MESSAGE (e.g. 5511999990003:2A6E2F02CE4125FDBA1B). The trigger output has it as messageId.',
+				description: 'Message ID as OWNER:MESSAGE (e.g. 5511999990003:2A6E2F02CE4125FDBA1B). Use the messageId from the ZapZap Trigger.',
 				displayOptions: { show: { resource: ['message'], operation: ['react'] } },
 			},
 			{
@@ -728,7 +728,7 @@ export class ZapZap implements INodeType {
 						type: 'json',
 						default: '{}',
 						description:
-							'Free-form data to link the instance to your system (e.g. {"clientId":"123"}). It is returned on webhook events.',
+							'Free-form data to link the instance to your system. Example: {"clientId":"123"}. It is returned on webhook events.',
 					},
 					{
 						displayName: 'System Name',
@@ -757,7 +757,7 @@ export class ZapZap implements INodeType {
 				required: true,
 				default: '',
 				placeholder: '120363000000000000@g.us',
-				description: 'Group ID, ending in @g.us',
+				description: 'Group ID, ending in @g.us. Run Group > Get Many to see the group IDs.',
 				displayOptions: { show: { resource: ['group'], operation: ['groupInfo'] } },
 			},
 			{
@@ -791,60 +791,6 @@ export class ZapZap implements INodeType {
 	};
 
 	methods = {
-		credentialTest: {
-			async zapZapApiTest(
-				this: ICredentialTestFunctions,
-				credential: ICredentialsDecrypted,
-			): Promise<INodeCredentialTestResult> {
-				const data = (credential.data ?? {}) as IDataObject;
-				const lang = toLang(data.language);
-				let base: string;
-				try {
-					base = validateBaseUrl(String(data.baseUrl || DEFAULT_BASE_URL));
-				} catch (e) {
-					return { status: 'Error', message: (e as Error).message };
-				}
-				const call = async (path: string): Promise<{ statusCode: number; body: IDataObject | IDataObject[] }> => {
-					const r = (await this.helpers.request({
-						method: 'GET',
-						uri: `${base}${path}`,
-						json: true,
-						headers: {
-							...clientHeaders(),
-							'x-api-key': String(data.apiKey ?? ''),
-							'x-api-secret': String(data.apiSecret ?? ''),
-						},
-						timeout: 20000,
-						followRedirect: false,
-						resolveWithFullResponse: true,
-						simple: false,
-					})) as { statusCode: number; body: IDataObject | IDataObject[] };
-					return r;
-				};
-				try {
-					const acc = await call('/account');
-					if (acc.statusCode !== 200) {
-						return { status: 'Error', message: friendlyMessage(acc.statusCode, lang) };
-					}
-					const who = (acc.body as IDataObject).name || (acc.body as IDataObject).email || 'ZapZap';
-					let count = '';
-					try {
-						const inst = await call('/instances');
-						if (inst.statusCode === 200 && Array.isArray(inst.body)) count = String(inst.body.length);
-					} catch {
-						// the account call already proved the keys work
-					}
-					const text = {
-						en: `Connected as ${who}${count ? `, ${count} instance(s)` : ''}`,
-						pt: `Conectado como ${who}${count ? `, ${count} instância(s)` : ''}`,
-						es: `Conectado como ${who}${count ? `, ${count} instancia(s)` : ''}`,
-					}[lang];
-					return { status: 'OK', message: text };
-				} catch (e) {
-					return { status: 'Error', message: friendlyMessage(null, lang) };
-				}
-			},
-		},
 		loadOptions: {
 			async getInstances(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				return loadInstanceOptions(this);
@@ -951,11 +897,12 @@ function copyOptions(body: IDataObject, opts: IDataObject, keys: string[]): void
 }
 
 async function runOperation(ctx: IExecuteFunctions, resource: string, operation: string, i: number): Promise<unknown> {
-	const getId = (): string => requireValue(ctx, ctx.getNodeParameter('instanceId', i, '') as string, 'Instance', i);
+	const lang = await getLang(ctx);
+	const getId = (): string => requireValue(ctx, ctx.getNodeParameter('instanceId', i, '') as string, 'Instance', i, lang);
 	const getNumber = async (): Promise<string> => {
 		const cc = String((await ctx.getCredentials('zapZapApi')).defaultCountryCode ?? '');
 		const n = normalizeNumber(ctx.getNodeParameter('number', i, '') as string, cc);
-		if (!n) throw new NodeOperationError(ctx.getNode(), 'Number is required', { itemIndex: i });
+		if (!n) throw new NodeOperationError(ctx.getNode(), msg(lang, 'numberRequired'), { itemIndex: i });
 		return n;
 	};
 	const get = (name: string): string => ctx.getNodeParameter(name, i, '') as string;
@@ -964,9 +911,9 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 	// ---------- Custom ----------
 	if (resource === 'custom') {
 		const method = get('method') as 'GET' | 'POST' | 'PUT' | 'DELETE';
-		const path = requireValue(ctx, get('path'), 'Path', i);
-		const bodyRaw = method === 'POST' || method === 'PUT' ? parseJsonParam(ctx, ctx.getNodeParameter('customBody', i, '{}'), 'Body', i) : undefined;
-		const qsRaw = parseJsonParam(ctx, ctx.getNodeParameter('customQuery', i, '{}'), 'Query', i);
+		const path = requireValue(ctx, get('path'), 'Path', i, lang);
+		const bodyRaw = method === 'POST' || method === 'PUT' ? parseJsonParam(ctx, ctx.getNodeParameter('customBody', i, '{}'), 'Body', i, lang) : undefined;
+		const qsRaw = parseJsonParam(ctx, ctx.getNodeParameter('customQuery', i, '{}'), 'Query', i, lang);
 		return zapZapRequest(ctx, {
 			method,
 			path,
@@ -986,17 +933,15 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 			case 'list':
 				return zapZapRequest(ctx, { method: 'GET', path: '/instances' });
 			case 'create': {
-				const name = requireValue(ctx, get('name'), 'Name', i).toUpperCase();
+				const name = requireValue(ctx, get('name'), 'Name', i, lang).toUpperCase();
 				if (!/^[A-Z0-9_-]+$/.test(name)) {
-					throw new NodeOperationError(ctx.getNode(), 'Name can only have letters, numbers, _ and -', {
-						itemIndex: i,
-					});
+					throw new NodeOperationError(ctx.getNode(), msg(lang, 'nameInvalid'), { itemIndex: i });
 				}
 				const o = opts('createOptions');
 				const body: IDataObject = { name };
 				if (o.systemName) body.systemName = o.systemName;
 				if (o.metadata && o.metadata !== '{}') {
-					const meta = parseJsonParam(ctx, o.metadata, 'Metadata', i);
+					const meta = parseJsonParam(ctx, o.metadata, 'Metadata', i, lang);
 					if (meta && typeof meta === 'object' && !Array.isArray(meta) && Object.keys(meta).length) {
 						body.metadata = meta as IDataObject;
 					}
@@ -1027,7 +972,7 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 					method: 'POST',
 					path: `/${enc(id)}/group/info`,
 					body: {
-						groupjid: requireValue(ctx, get('groupjid'), 'Group ID', i),
+						groupjid: requireValue(ctx, get('groupjid'), 'Group ID', i, lang),
 						getInviteLink: ctx.getNodeParameter('getInviteLink', i, false) as boolean,
 					},
 				});
@@ -1037,12 +982,12 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 					.map((p) => normalizeNumber(p))
 					.filter(Boolean);
 				if (!participants.length) {
-					throw new NodeOperationError(ctx.getNode(), 'Add at least one participant', { itemIndex: i });
+					throw new NodeOperationError(ctx.getNode(), msg(lang, 'participantsRequired'), { itemIndex: i });
 				}
 				return zapZapRequest(ctx, {
 					method: 'POST',
 					path: `/${enc(id)}/group/create`,
-					body: { name: requireValue(ctx, get('groupName'), 'Group Name', i), participants },
+					body: { name: requireValue(ctx, get('groupName'), 'Group Name', i, lang), participants },
 				});
 			}
 		}
@@ -1066,7 +1011,7 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 				const o = opts('textOptions');
 				const body: IDataObject = {
 					number: await getNumber(),
-					text: requireValue(ctx, get('text'), 'Text', i),
+					text: requireValue(ctx, get('text'), 'Text', i, lang),
 				};
 				copyOptions(body, o, ['mentions', 'replyid', 'delay']);
 				withTyping(body, o);
@@ -1077,24 +1022,20 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 				const type = get('type') || 'image';
 				const body: IDataObject = { number: await getNumber(), type };
 				if ((ctx.getNodeParameter('mediaSource', i, 'url') as string) === 'binary') {
-					const prop = requireValue(ctx, get('binaryPropertyName') || 'data', 'Input Binary Field', i);
+					const prop = requireValue(ctx, get('binaryPropertyName') || 'data', 'Input Binary Field', i, lang);
 					const meta = ctx.helpers.assertBinaryData(i, prop);
 					const buffer = await ctx.helpers.getBinaryDataBuffer(i, prop);
 					if (buffer.length > MAX_BINARY_BYTES) {
-						throw new NodeOperationError(
-							ctx.getNode(),
-							'The file is too large to send as binary data (limit about 1 MB). Upload it somewhere and use the URL source.',
-							{ itemIndex: i },
-						);
+						throw new NodeOperationError(ctx.getNode(), msg(lang, 'tooLarge'), { itemIndex: i });
 					}
 					body.file = `data:${meta.mimeType || 'application/octet-stream'};base64,${buffer.toString('base64')}`;
 					if (type === 'document' && !o.docName && meta.fileName) o.docName = meta.fileName;
 				} else {
-					const url = requireValue(ctx, get('file'), 'File URL', i);
+					const url = requireValue(ctx, get('file'), 'File URL', i, lang);
 					try {
 						validateHttpUrl(url);
-					} catch (e) {
-						throw new NodeOperationError(ctx.getNode(), `File URL: ${(e as Error).message}`, { itemIndex: i });
+					} catch {
+						throw new NodeOperationError(ctx.getNode(), msg(lang, 'fileUrl'), { itemIndex: i });
 					}
 					body.file = url;
 				}
@@ -1110,28 +1051,26 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 				const kind = get('interactiveType') || 'poll';
 				const body: IDataObject = {
 					number: await getNumber(),
-					text: requireValue(ctx, get('interactiveText'), 'Text', i),
+					text: requireValue(ctx, get('interactiveText'), 'Text', i, lang),
 				};
 				if (kind === 'poll') {
-					const choices = parseJsonParam(ctx, ctx.getNodeParameter('pollChoices', i, '[]'), 'Choices', i);
+					const choices = parseJsonParam(ctx, ctx.getNodeParameter('pollChoices', i, '[]'), 'Choices', i, lang);
 					if (!Array.isArray(choices) || choices.length < 2) {
-						throw new NodeOperationError(ctx.getNode(), 'A poll needs at least 2 choices', { itemIndex: i });
+						throw new NodeOperationError(ctx.getNode(), msg(lang, 'pollChoices'), { itemIndex: i });
 					}
 					body.choices = choices.map(String);
 					body.selectableCount = ctx.getNodeParameter('selectableCount', i, 1) as number;
 				} else if (kind === 'buttons') {
-					const buttons = parseJsonParam(ctx, ctx.getNodeParameter('buttonsJson', i, '[]'), 'Buttons', i);
+					const buttons = parseJsonParam(ctx, ctx.getNodeParameter('buttonsJson', i, '[]'), 'Buttons', i, lang);
 					if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
-						throw new NodeOperationError(ctx.getNode(), 'Buttons must be an array of 1 to 3 items', {
-							itemIndex: i,
-						});
+						throw new NodeOperationError(ctx.getNode(), msg(lang, 'buttons'), { itemIndex: i });
 					}
 					body.buttons = buttons as IDataObject[];
 					copyOptions(body, opts('buttonsOptions'), ['image', 'footer']);
 				} else {
-					const choices = parseJsonParam(ctx, ctx.getNodeParameter('listChoices', i, '[]'), 'Choices', i);
+					const choices = parseJsonParam(ctx, ctx.getNodeParameter('listChoices', i, '[]'), 'Choices', i, lang);
 					if (!Array.isArray(choices) || !choices.length) {
-						throw new NodeOperationError(ctx.getNode(), 'A list needs at least 1 choice', { itemIndex: i });
+						throw new NodeOperationError(ctx.getNode(), msg(lang, 'listChoices'), { itemIndex: i });
 					}
 					body.choices = choices.map(String);
 					copyOptions(body, opts('listOptions'), ['listButton', 'footerText']);
@@ -1150,8 +1089,8 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 			case 'sendContact': {
 				const body: IDataObject = {
 					number: await getNumber(),
-					fullName: requireValue(ctx, get('fullName'), 'Full Name', i),
-					phoneNumber: requireValue(ctx, get('phoneNumber'), 'Phone Numbers', i),
+					fullName: requireValue(ctx, get('fullName'), 'Full Name', i, lang),
+					phoneNumber: requireValue(ctx, get('phoneNumber'), 'Phone Numbers', i, lang),
 				};
 				copyOptions(body, opts('contactOptions'), ['organization', 'email']);
 				return zapZapRequest(ctx, { method: 'POST', path: `${base}/send/contact`, body });
@@ -1162,14 +1101,14 @@ async function runOperation(ctx: IExecuteFunctions, resource: string, operation:
 					path: `${base}/message/react`,
 					body: {
 						number: await getNumber(),
-						id: requireValue(ctx, get('id'), 'Message ID', i),
+						id: requireValue(ctx, get('id'), 'Message ID', i, lang),
 						emoji: get('emoji'),
 					},
 				});
 		}
 	}
 
-	throw new NodeOperationError(ctx.getNode(), `Unknown operation: ${resource}/${operation}`, { itemIndex: i });
+	throw new NodeOperationError(ctx.getNode(), msg(lang, 'unknownOp', { op: `${resource}/${operation}` }), { itemIndex: i });
 }
 
 function enc(v: string): string {

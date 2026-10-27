@@ -50,7 +50,7 @@ test('sendMedia by URL, by binary, too large binary, bad URL scheme', async () =
 
 		const big = { data: { meta: { mimeType: 'video/mp4' }, buffer: Buffer.alloc(2_000_000) } };
 		await assert.rejects(run(makeContext({ baseUrl: srv.url, binary: big, params: { resource: 'message', operation: 'sendMedia', instanceId: INST, number: '5511999990001', type: 'video', mediaSource: 'binary', binaryPropertyName: 'data' } })), /too large/);
-		await assert.rejects(run(makeContext({ baseUrl: srv.url, params: { resource: 'message', operation: 'sendMedia', instanceId: INST, number: '5511999990001', type: 'image', mediaSource: 'url', file: 'file:///etc/passwd' } })), /http and https/);
+		await assert.rejects(run(makeContext({ baseUrl: srv.url, params: { resource: 'message', operation: 'sendMedia', instanceId: INST, number: '5511999990001', type: 'image', mediaSource: 'url', file: 'file:///etc/passwd' } })), /http:\/\/ or https/);
 		assert.equal(srv.hits.length, 2);
 	} finally { await srv.close(); }
 });
@@ -187,7 +187,7 @@ test('continueOnFail returns an error item per failing input and keeps going', a
 		assert.equal(out[0].length, 3);
 		assert.match(out[0][1].json.error, /invalid|not on WhatsApp/);
 		assert.deepEqual(out[0].map((o) => o.pairedItem.item), [0, 1, 2]);
-		await assert.rejects(run(makeContext({ baseUrl: srv.url, items: [{ json: {} }], continueOnFail: false, params: { resource: 'message', operation: 'sendText', instanceId: '', number: '5511999990001', text: 'x' } })), /Instance is required/);
+		await assert.rejects(run(makeContext({ baseUrl: srv.url, items: [{ json: {} }], continueOnFail: false, params: { resource: 'message', operation: 'sendText', instanceId: '', number: '5511999990001', text: 'x' } })), /Pick an instance/);
 	} finally { await srv.close(); }
 });
 

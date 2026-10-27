@@ -6,7 +6,7 @@
 	"nodeView": {
 		"instanceId": {
 			"displayName": "Instance",
-			"description": "WhatsApp instance to listen to. Pick it from the list."
+			"description": "The connected WhatsApp number to listen to. Pick it from the list. If the list is empty, create and connect one in app.zapzapapi.com."
 		},
 		"events": {
 			"displayName": "Events",

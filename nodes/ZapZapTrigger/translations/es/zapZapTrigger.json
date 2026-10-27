@@ -6,7 +6,7 @@
 	"nodeView": {
 		"instanceId": {
 			"displayName": "Instancia",
-			"description": "Instancia de WhatsApp a escuchar. Elígela de la lista."
+			"description": "Número de WhatsApp conectado que se escuchará. Elígelo de la lista. Si está vacía, crea y conecta una en app.zapzapapi.com."
 		},
 		"events": {
 			"displayName": "Eventos",

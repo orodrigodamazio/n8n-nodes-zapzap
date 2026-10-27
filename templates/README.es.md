@@ -2,7 +2,7 @@
 
 Flujos de n8n listos para importar que usan los [nodos de comunidad de ZapZap](../README.es.md). Instala primero `n8n-nodes-zapzap` y en n8n elige **Workflows > Import from file** con uno de los archivos JSON.
 
-Después de importar: selecciona tu credencial **ZapZap API** en cada nodo ZapZap y elige tu instancia de WhatsApp de la lista (reemplaza `YOUR_INSTANCE_ID`). Los números llevan solo dígitos con código de país (`5511999990001`).
+Después de importar: selecciona tu credencial **ZapZap API** en cada nodo ZapZap y elige tu instancia de WhatsApp de la lista (el campo empieza vacío). Los números llevan solo dígitos con código de país (`5511999990001`).
 
 | Archivo | Qué hace | Empieza con |
 |---|---|---|

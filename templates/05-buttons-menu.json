@@ -18,10 +18,13 @@
     },
     {
       "parameters": {
-        "instanceId": "YOUR_INSTANCE_ID",
+        "instanceId": "",
         "events": [
           "messages"
-        ]
+        ],
+        "options": {
+          "ignoreOwn": true
+        }
       },
       "id": "zapzap-trigger",
       "name": "ZapZap Trigger",
@@ -49,17 +52,8 @@
           },
           "conditions": [
             {
-              "id": "cond-3",
-              "leftValue": "={{ $json.data.message.fromMe }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "false",
-                "singleValue": true
-              }
-            },
-            {
               "id": "cond-4",
-              "leftValue": "={{ $json.data.message.text.trim().toLowerCase() }}",
+              "leftValue": "={{ $json.text.trim().toLowerCase() }}",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -84,8 +78,8 @@
       "parameters": {
         "resource": "message",
         "operation": "sendInteractive",
-        "instanceId": "YOUR_INSTANCE_ID",
-        "number": "={{ $json.data.message.chatid.replace('@s.whatsapp.net', '') }}",
+        "instanceId": "",
+        "number": "={{ $json.from }}",
         "interactiveType": "buttons",
         "interactiveText": "How can we help?",
         "buttonsJson": "[{\"text\":\"Talk to sales\",\"id\":\"sales\"},{\"text\":\"Support\",\"id\":\"support\"},{\"text\":\"Our site\",\"url\":\"https://example.com\"}]"

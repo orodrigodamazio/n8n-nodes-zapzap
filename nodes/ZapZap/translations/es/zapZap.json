@@ -102,7 +102,7 @@
 		},
 		"instanceId": {
 			"displayName": "Instancia",
-			"description": "Instancia de WhatsApp que se usará. Elígela de la lista."
+			"description": "Número de WhatsApp conectado que se usará. Elígelo de la lista. Si está vacía, crea y conecta una en app.zapzapapi.com."
 		},
 		"number": {
 			"displayName": "Número",

@@ -6,7 +6,7 @@
 	"nodeView": {
 		"instanceId": {
 			"displayName": "Instância",
-			"description": "Instância de WhatsApp que será monitorada. Escolha na lista."
+			"description": "Número de WhatsApp conectado que será monitorado. Escolha na lista. Se estiver vazia, crie e conecte uma em app.zapzapapi.com."
 		},
 		"events": {
 			"displayName": "Eventos",

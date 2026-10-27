@@ -95,20 +95,16 @@ test('loadOptions lists instance names with status and sends the client header',
 	} finally { await srv.close(); }
 });
 
-test('credentialTest: friendly success and failure, header sent', async () => {
-	const srv = await startServer((hit) => (hit.headers['x-api-key'] === 'good' ? { body: hit.url === '/account' ? { name: 'Ana' } : [1, 2, 3] } : { status: 401, body: {} }));
-	try {
-		const t = new ZapZap().methods.credentialTest.zapZapApiTest;
-		const ctx = makeContext({ baseUrl: srv.url });
-		const ok = await t.call(ctx, { data: { apiKey: 'good', apiSecret: 's', baseUrl: srv.url, language: 'pt' } });
-		assert.deepEqual(ok, { status: 'OK', message: 'Conectado como Ana, 3 instância(s)' });
-		const bad = await t.call(ctx, { data: { apiKey: 'nope', apiSecret: 's', baseUrl: srv.url, language: 'en' } });
-		assert.equal(bad.status, 'Error');
-		assert.match(bad.message, /Invalid API Key/);
-		const noHttps = await t.call(ctx, { data: { apiKey: 'a', apiSecret: 's', baseUrl: 'http://api.example.com' } });
-		assert.match(noHttps.message, /https/);
-		assert.ok(srv.hits.every((h) => h.headers['x-zapzap-client'] === ID));
-	} finally { await srv.close(); }
+test('credential class carries the test and the icon (no testedBy on the node)', () => {
+	const cred = new (require('../dist/credentials/ZapZapApi.credentials.js').ZapZapApi)();
+	assert.equal(cred.icon, 'file:zapzap.svg');
+	assert.equal(cred.test.request.url, '/account');
+	assert.equal(cred.test.request.baseURL, '={{$credentials.baseUrl}}');
+	assert.equal(cred.test.request.disableFollowRedirect, true);
+	assert.ok(require('node:fs').existsSync(require('node:path').join(__dirname, '..', 'dist', 'credentials', 'zapzap.svg')));
+	const node = new ZapZap();
+	assert.equal(node.methods.credentialTest, undefined);
+	assert.ok(node.description.credentials.every((c) => !c.testedBy));
 });
 
 test('webhook: valid signature passes and adds quick fields', async () => {
@@ -190,8 +186,6 @@ test('beginner flow end to end: credential, pick instance, send text, receive in
 		return { status: 404, body: {} };
 	});
 	try {
-		const cred = await new ZapZap().methods.credentialTest.zapZapApiTest.call(makeContext({ baseUrl: srv.url }), { data: { apiKey: 'k', apiSecret: 's', baseUrl: srv.url } });
-		assert.equal(cred.status, 'OK');
 		const sd = {};
 		const ctxT = makeContext({ baseUrl: srv.url, staticData: sd, params: { instanceId: 'inst-1', events: ['messages'], manualSetup: false } });
 		const names = await trigger.methods.loadOptions.getInstances.call(ctxT);

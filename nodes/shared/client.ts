@@ -7,13 +7,11 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError, NodeOperationError, sleep } from 'n8n-workflow';
-import pkg from '../../package.json';
 
-// The version comes from package.json at build time (the compiler copies it to dist/package.json),
-// so the header can never drift from the published version.
+// Keep in sync with package.json "version". test/action.test.js fails if they differ.
 
 export const CLIENT_NAME = 'n8n-nodes-zapzap';
-export const CLIENT_VERSION: string = pkg.version;
+export const CLIENT_VERSION = '0.1.3';
 export const CLIENT_HEADER = 'X-ZapZap-Client';
 export const CLIENT_ID = `${CLIENT_NAME}/${CLIENT_VERSION}`;
 export const DEFAULT_BASE_URL = 'https://api.zapzapapi.com/api/v1';
@@ -109,12 +107,135 @@ const MESSAGES: Record<string, Record<Lang, string>> = {
 	},
 };
 
+type Vars = Record<string, string>;
+
+/** Messages raised by the node itself (before any call). Each says what happened and what to do. */
+const LOCAL: Record<string, Record<Lang, string>> = {
+	required: {
+		en: '{label} is required. Fill in this field in the node.',
+		pt: '{label} é obrigatório. Preencha este campo no nó.',
+		es: '{label} es obligatorio. Completa este campo en el nodo.',
+	},
+	instanceRequired: {
+		en: 'Pick an instance in the node. If the list is empty, create and connect one in app.zapzapapi.com first.',
+		pt: 'Escolha uma instância no nó. Se a lista estiver vazia, crie e conecte uma em app.zapzapapi.com antes.',
+		es: 'Elige una instancia en el nodo. Si la lista está vacía, crea y conecta una en app.zapzapapi.com antes.',
+	},
+	noInstances: {
+		en: 'No instances yet. Create one in app.zapzapapi.com',
+		pt: 'Nenhuma instância ainda. Crie uma em app.zapzapapi.com',
+		es: 'Aún no hay instancias. Crea una en app.zapzapapi.com',
+	},
+	numberRequired: {
+		en: 'Number is required. Type the WhatsApp number with country code, for example 5511999990001.',
+		pt: 'O número é obrigatório. Digite o número do WhatsApp com código do país, por exemplo 5511999990001.',
+		es: 'El número es obligatorio. Escribe el número de WhatsApp con código de país, por ejemplo 5511999990001.',
+	},
+	nameInvalid: {
+		en: 'Name can only have letters, numbers, _ and -. Remove spaces and accents, for example MY-SHOP.',
+		pt: 'O nome só pode ter letras, números, _ e -. Tire espaços e acentos, por exemplo MINHA-LOJA.',
+		es: 'El nombre solo puede tener letras, números, _ y -. Quita espacios y acentos, por ejemplo MI-TIENDA.',
+	},
+	participantsRequired: {
+		en: 'Add at least one participant. Type numbers with country code, separated by commas.',
+		pt: 'Adicione pelo menos um participante. Digite os números com código do país, separados por vírgula.',
+		es: 'Agrega al menos un participante. Escribe los números con código de país, separados por coma.',
+	},
+	pollChoices: {
+		en: 'A poll needs at least 2 choices. Example: ["Great", "Good", "Bad"]',
+		pt: 'Uma enquete precisa de pelo menos 2 opções. Exemplo: ["Ótimo", "Bom", "Ruim"]',
+		es: 'Una encuesta necesita al menos 2 opciones. Ejemplo: ["Excelente", "Bueno", "Malo"]',
+	},
+	buttons: {
+		en: 'Buttons need 1 to 3 items. Keep the example shape: [{"text":"Yes","id":"yes"}]',
+		pt: 'Os botões precisam de 1 a 3 itens. Mantenha o formato do exemplo: [{"text":"Sim","id":"sim"}]',
+		es: 'Los botones necesitan de 1 a 3 elementos. Mantén el formato del ejemplo: [{"text":"Sí","id":"si"}]',
+	},
+	listChoices: {
+		en: 'A list needs at least 1 choice. Example: ["[Products]", "T-shirt|p1|$ 50"]',
+		pt: 'Uma lista precisa de pelo menos 1 opção. Exemplo: ["[Produtos]", "Camiseta|p1|R$ 50"]',
+		es: 'Una lista necesita al menos 1 opción. Ejemplo: ["[Productos]", "Camiseta|p1|$ 50"]',
+	},
+	fileUrl: {
+		en: 'File URL must start with http:// or https://',
+		pt: 'A URL do arquivo precisa começar com http:// ou https://',
+		es: 'La URL del archivo debe empezar con http:// o https://',
+	},
+	tooLarge: {
+		en: 'The file is too large to send as binary data (limit about 1 MB). Upload it somewhere and use the URL source.',
+		pt: 'O arquivo é grande demais para enviar como dado binário (limite de cerca de 1 MB). Suba o arquivo em algum lugar e use a origem URL.',
+		es: 'El archivo es demasiado grande para enviarlo como datos binarios (límite de 1 MB aprox.). Súbelo a algún sitio y usa el origen URL.',
+	},
+	jsonInvalid: {
+		en: '{label} is not valid JSON. Check commas and double quotes. Example: ["Option 1", "Option 2"]',
+		pt: '{label} não é um JSON válido. Confira vírgulas e aspas duplas. Exemplo: ["Opção 1", "Opção 2"]',
+		es: '{label} no es un JSON válido. Revisa las comas y las comillas dobles. Ejemplo: ["Opción 1", "Opción 2"]',
+	},
+	pathInvalid: {
+		en: 'Path must start with "/" and stay inside the ZapZap API. Example: /account',
+		pt: 'O caminho precisa começar com "/" e ficar dentro da API do ZapZap. Exemplo: /account',
+		es: 'La ruta debe empezar con "/" y quedarse dentro de la API de ZapZap. Ejemplo: /account',
+	},
+	baseUrl: {
+		en: 'Base URL is invalid ({why}). Fix it in the ZapZap API credential. The default is {def}',
+		pt: 'A Base URL é inválida ({why}). Corrija na credencial ZapZap API. O padrão é {def}',
+		es: 'La Base URL no es válida ({why}). Corrígela en la credencial ZapZap API. El valor por defecto es {def}',
+	},
+	unknownOp: {
+		en: 'Unknown operation: {op}. Pick the operation again in the node.',
+		pt: 'Operação desconhecida: {op}. Escolha a operação de novo no nó.',
+		es: 'Operación desconocida: {op}. Elige la operación otra vez en el nodo.',
+	},
+	maybeSent: {
+		en: 'The message may have been sent already. Check the chat before sending again.',
+		pt: 'A mensagem pode já ter sido enviada. Confira a conversa antes de enviar de novo.',
+		es: 'Es posible que el mensaje ya se haya enviado. Revisa el chat antes de volver a enviarlo.',
+	},
+	noSecret: {
+		en: 'ZapZap did not return a webhook secret, so incoming calls to this trigger cannot be verified. Anyone with the URL could send fake events. Update the ZapZap instance or paste the secret in Options > Webhook Secret.',
+		pt: 'O ZapZap não devolveu o segredo do webhook, então as chamadas recebidas por este gatilho não podem ser verificadas. Quem tiver a URL poderia enviar eventos falsos. Atualize a instância do ZapZap ou cole o segredo em Options > Webhook Secret.',
+		es: 'ZapZap no devolvió el secreto del webhook, así que las llamadas entrantes a este disparador no se pueden verificar. Cualquiera con la URL podría enviar eventos falsos. Actualiza la instancia de ZapZap o pega el secreto en Options > Webhook Secret.',
+	},
+};
+
+/** Field names as shown in the UI, per language, for the "is required" message. */
+const FIELDS: Record<string, Record<Lang, string>> = {
+	Instance: { en: 'Instance', pt: 'Instância', es: 'Instancia' },
+	Path: { en: 'Path', pt: 'Caminho', es: 'Ruta' },
+	Name: { en: 'Name', pt: 'Nome', es: 'Nombre' },
+	Text: { en: 'Text', pt: 'Texto', es: 'Texto' },
+	'Group ID': { en: 'Group ID', pt: 'ID do grupo', es: 'ID del grupo' },
+	'Group Name': { en: 'Group Name', pt: 'Nome do grupo', es: 'Nombre del grupo' },
+	'File URL': { en: 'File URL', pt: 'URL do arquivo', es: 'URL del archivo' },
+	'Input Binary Field': { en: 'Input Binary Field', pt: 'Campo binário de entrada', es: 'Campo binario de entrada' },
+	'Full Name': { en: 'Full Name', pt: 'Nome completo', es: 'Nombre completo' },
+	'Phone Numbers': { en: 'Phone Numbers', pt: 'Telefones', es: 'Teléfonos' },
+	'Message ID': { en: 'Message ID', pt: 'ID da mensagem', es: 'ID del mensaje' },
+	Body: { en: 'Body', pt: 'Corpo', es: 'Cuerpo' },
+	Query: { en: 'Query', pt: 'Query', es: 'Query' },
+	Choices: { en: 'Choices', pt: 'Opções', es: 'Opciones' },
+	Buttons: { en: 'Buttons', pt: 'Botões', es: 'Botones' },
+	Metadata: { en: 'Metadata', pt: 'Metadados', es: 'Metadatos' },
+};
+
+/** Text raised by the node itself, in the language chosen in the credential. */
+export function msg(lang: Lang, key: string, vars: Vars = {}): string {
+	const base = (LOCAL[key] ?? { en: key, pt: key, es: key })[lang];
+	return base.replace(/\{(\w+)\}/g, (_, k: string) => {
+		if (k === 'label') return FIELDS[vars.label]?.[lang] ?? vars.label;
+		return vars[k] ?? '';
+	});
+}
+
 export function friendlyMessage(status: number | null, lang: Lang = 'en', detail?: string): string {
 	if (status === null) return MESSAGES.network[lang];
 	if (status >= 300 && status < 400) return MESSAGES.redirect[lang];
 	if (detail && status !== 401 && status !== 402 && status !== 429) {
 		if (/desconect|disconnect|not connected|n[aã]o conectad|qr ?code/i.test(detail)) return MESSAGES.disconnected[lang];
-		if (/n[uú]mero|number|not on whatsapp|n[aã]o tem whatsapp|invalid phone|jid/i.test(detail) && status < 500) {
+		if (
+			/not on whatsapp|n[aã]o tem whatsapp|invalid (phone|number|jid)|n[uú]mero inv[aá]lido|jid inv[aá]lido|invalid.*\bjid\b/i.test(detail) &&
+			(status === 400 || status === 404 || status === 422)
+		) {
 			return MESSAGES.badNumber[lang];
 		}
 	}
@@ -177,9 +298,11 @@ export async function getBaseUrl(ctx: Ctx): Promise<string> {
 	try {
 		return validateBaseUrl(String(credentials.baseUrl || ''));
 	} catch (e) {
-		throw new NodeOperationError(ctx.getNode(), (e as Error).message, {
-			description: 'Fix the Base URL in the ZapZap API credential. The default is ' + DEFAULT_BASE_URL,
-		});
+		const lang = toLang(credentials.language);
+		throw new NodeOperationError(
+			ctx.getNode(),
+			msg(lang, 'baseUrl', { why: (e as Error).message, def: DEFAULT_BASE_URL }),
+		);
 	}
 }
 
@@ -209,10 +332,12 @@ export async function zapZapRequest<T = unknown>(ctx: Ctx, req: ZapZapRequest): 
 	const baseUrl = await getBaseUrl(ctx);
 	const lang = await getLang(ctx);
 	if (!req.path.startsWith('/') || req.path.includes('://') || req.path.includes('..')) {
-		throw new NodeOperationError(ctx.getNode(), 'Path must start with "/" and stay inside the ZapZap API');
+		throw new NodeOperationError(ctx.getNode(), msg(lang, 'pathInvalid'));
 	}
 	const url = `${baseUrl}${req.path}`;
 	const idempotent = req.method === 'GET' || req.method === 'PUT' || req.method === 'DELETE';
+	// A POST that failed on the network or with 5xx may have been processed anyway.
+	const uncertain = !idempotent;
 	let attempt = 0;
 
 	for (;;) {
@@ -238,12 +363,20 @@ export async function zapZapRequest<T = unknown>(ctx: Ctx, req: ZapZapRequest): 
 				await runtime.sleep(backoff(attempt));
 				continue;
 			}
-			const apiError = new NodeApiError(ctx.getNode(), error as JsonObject, {
-				message: friendlyMessage(null, lang),
+			// Never hand the raw library error to NodeApiError: it can carry the request config,
+			// including the x-api-key and x-api-secret headers. Only a sanitized message and the code go in.
+			const code = (error as { code?: unknown })?.code;
+			const safe = {
+				message: safeText((error as Error)?.message) ?? '',
+				...(typeof code === 'string' ? { code } : {}),
+			} as JsonObject;
+			const text = friendlyMessage(null, lang) + (uncertain ? ' ' + msg(lang, 'maybeSent') : '');
+			const apiError = new NodeApiError(ctx.getNode(), safe, {
+				message: text,
 				description: safeText((error as Error)?.message),
 			});
 			// n8n replaces the message for timeouts; keep ours, it says what to do.
-			apiError.message = friendlyMessage(null, lang);
+			apiError.message = text;
 			throw apiError;
 		}
 
@@ -266,17 +399,21 @@ export async function zapZapRequest<T = unknown>(ctx: Ctx, req: ZapZapRequest): 
 			(res.body && typeof res.body === 'object' ? res.body : { message: String(res.body ?? '') }) as JsonObject,
 			{
 				httpCode: String(status),
-				message: friendlyMessage(status, lang, detail),
+				message: friendlyMessage(status, lang, detail) + (uncertain && status >= 500 ? ' ' + msg(lang, 'maybeSent') : ''),
 				description: detail ? `ZapZap: ${safeText(detail)}` : undefined,
 			},
 		);
 	}
 }
 
-export function requireValue(ctx: Ctx, value: string, label: string, itemIndex?: number): string {
+export function requireValue(ctx: Ctx, value: string, label: string, itemIndex?: number, lang: Lang = 'en'): string {
 	const v = (value ?? '').toString().trim();
 	if (!v) {
-		throw new NodeOperationError(ctx.getNode(), `${label} is required`, { itemIndex });
+		throw new NodeOperationError(
+			ctx.getNode(),
+			label === 'Instance' ? msg(lang, 'instanceRequired') : msg(lang, 'required', { label }),
+			{ itemIndex },
+		);
 	}
 	return v;
 }
@@ -311,15 +448,12 @@ export function validateHttpUrl(raw: string): string {
 }
 
 /** Accepts a JSON string (what the UI sends) or an already parsed value (from expressions). */
-export function parseJsonParam(ctx: Ctx, value: unknown, label: string, itemIndex: number): unknown {
+export function parseJsonParam(ctx: Ctx, value: unknown, label: string, itemIndex: number, lang: Lang = 'en'): unknown {
 	if (typeof value !== 'string') return value;
 	try {
 		return JSON.parse(value);
 	} catch {
-		throw new NodeOperationError(ctx.getNode(), `${label} is not valid JSON`, {
-			itemIndex,
-			description: 'Check commas and double quotes. Example: ["Option 1", "Option 2"]',
-		});
+		throw new NodeOperationError(ctx.getNode(), msg(lang, 'jsonInvalid', { label }), { itemIndex });
 	}
 }
 
@@ -334,7 +468,7 @@ export async function loadInstanceOptions(ctx: ILoadOptionsFunctions): Promise<I
 		path: '/instances',
 	});
 	const arr = Array.isArray(list) ? list : (list?.instances ?? []);
-	return arr
+	const options = arr
 		.filter((i) => i && i.id)
 		.map((i) => {
 			const bits = [i.status, i.phone_number].filter(Boolean).join(', ');
@@ -343,4 +477,6 @@ export async function loadInstanceOptions(ctx: ILoadOptionsFunctions): Promise<I
 				value: String(i.id),
 			};
 		});
+	if (!options.length) return [{ name: msg(await getLang(ctx), 'noInstances'), value: '' }];
+	return options;
 }

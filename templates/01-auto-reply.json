@@ -18,10 +18,13 @@
     },
     {
       "parameters": {
-        "instanceId": "YOUR_INSTANCE_ID",
+        "instanceId": "",
         "events": [
           "messages"
-        ]
+        ],
+        "options": {
+          "ignoreOwn": true
+        }
       },
       "id": "zapzap-trigger",
       "name": "ZapZap Trigger",
@@ -49,17 +52,8 @@
           },
           "conditions": [
             {
-              "id": "cond-1",
-              "leftValue": "={{ $json.data.message.fromMe }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "false",
-                "singleValue": true
-              }
-            },
-            {
               "id": "cond-2",
-              "leftValue": "={{ $json.data.message.text }}",
+              "leftValue": "={{ $json.text }}",
               "operator": {
                 "type": "string",
                 "operation": "contains"
@@ -84,8 +78,8 @@
       "parameters": {
         "resource": "message",
         "operation": "sendText",
-        "instanceId": "YOUR_INSTANCE_ID",
-        "number": "={{ $json.data.message.chatid.replace('@s.whatsapp.net', '') }}",
+        "instanceId": "",
+        "number": "={{ $json.from }}",
         "text": "Hi! Thanks for your message. A person from our team will answer soon."
       },
       "id": "send-reply",

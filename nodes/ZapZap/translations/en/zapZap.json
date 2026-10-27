@@ -102,7 +102,7 @@
 		},
 		"instanceId": {
 			"displayName": "Instance",
-			"description": "WhatsApp instance to use. Pick it from the list."
+			"description": "The connected WhatsApp number to use. Pick it from the list. If the list is empty, create and connect one in app.zapzapapi.com."
 		},
 		"number": {
 			"displayName": "Number",

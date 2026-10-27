@@ -9,8 +9,8 @@ Languages: English | [Português](README.pt-BR.md) | [Español](README.es.md)
 ## Get started in 3 steps
 
 1. **Install.** In n8n open **Settings > Community Nodes > Install**, type `n8n-nodes-zapzap` and accept. ([guide](https://docs.n8n.io/integrations/community-nodes/installation/))
-2. **Paste your keys.** In the ZapZap panel ([app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node)) open **Settings > API** and copy the API Key and API Secret. In n8n create a **ZapZap API** credential, paste both and press **Test**. You should see "Connected as ..." with your number of instances.
-3. **Send your first message.** Add a **ZapZap** node, keep Resource = Message and Operation = Send Text, choose your instance from the list (it shows the name and whether it is connected), type a number and a text, and run it.
+2. **Paste your keys.** In the ZapZap panel ([app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node)) open **Settings > API** and copy the API Key and API Secret. In n8n create a **ZapZap API** credential, paste both and save (n8n tests the credential when you save). You should see a green success message; if it is red, see Troubleshooting below.
+3. **Send your first message.** Add a **ZapZap** node, keep Resource = Message and Operation = Send Text, choose your instance from the list (an "instance" is a connected WhatsApp number; it shows the name and whether it is connected; if the list is empty, create and connect one in app.zapzapapi.com first), type a number and a text, and run it.
 
 Want a ready workflow? Import any file from [`templates/`](templates/README.md).
 
@@ -43,7 +43,7 @@ Good to know:
 - **Text** can have emoji and any script, including Arabic, Hebrew and CJK.
 - **Several items** in, several results out. Turn on **Continue On Fail** to get an error item for the ones that fail and keep going.
 - **Rate limits**: a 429 answer is retried up to 3 times, waiting as long as `Retry-After` says. Temporary 502/503/504 errors are retried for read calls only.
-- **No duplicate messages**: a send is never repeated after a timeout or a server error, because the message may already have gone out. The node then stops with a clear message so you can decide. (The API has no idempotency key.)
+- **No duplicate messages**: a send is never repeated after a timeout or a server error, because the message may already have gone out. The node then stops with a warning ("The message may have been sent already. Check the chat before sending again") so you can decide. (The API has no idempotency key.)
 - **Redirects** are never followed, so your keys cannot be sent to another host.
 - Usable as an **AI agent tool** in n8n.
 - Instance creation is billed to your ZapZap balance; check the [pricing](https://zapzapapi.com/precos?utm_source=n8n&utm_medium=community&utm_campaign=node) first.
@@ -56,7 +56,7 @@ Good to know:
 
 The output has easy fields at the top: `from`, `text`, `type`, `time`, `chatId`, `isGroup`, `fromMe`, `messageId`, `instanceName`, plus the full payload (`data.message...`).
 
-- Every delivery is signed (`X-ZapZap-Signature`, HMAC-SHA256 with timestamp). The node checks it with a constant-time comparison and rejects forged or older than 5 minutes deliveries. With **Set Webhook Manually** paste the secret in Options, otherwise deliveries cannot be verified.
+- Every delivery is signed (`X-ZapZap-Signature`, HMAC-SHA256 with timestamp). The node checks it with a constant-time comparison and rejects forged or older than 5 minutes deliveries. With **Set Webhook Manually** paste the secret in Options, otherwise anyone who knows the URL could send fake events. With automatic setup the node refuses to activate if ZapZap does not return the secret.
 - Retried deliveries (same delivery ID) are skipped. Turn on **Ignore My Own Messages** for auto replies.
 - The answer is sent immediately; your workflow runs after it.
 - While you use "Listen for test event" the instance webhook points to the test URL and is restored when you stop.

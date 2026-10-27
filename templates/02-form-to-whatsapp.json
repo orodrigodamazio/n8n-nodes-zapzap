@@ -36,7 +36,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendText",
-        "instanceId": "YOUR_INSTANCE_ID",
+        "instanceId": "",
         "number": "={{ String($json.body.phone).replace(/\\D/g, '') }}",
         "text": "=Hi {{ $json.body.name }}! We got your request and will contact you soon."
       },

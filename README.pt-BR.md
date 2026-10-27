@@ -7,8 +7,8 @@ Idiomas: [English](README.md) | Português | [Español](README.es.md)
 ## Comece em 3 passos
 
 1. **Instale.** No n8n abra **Settings > Community Nodes > Install**, digite `n8n-nodes-zapzap` e aceite. ([guia](https://docs.n8n.io/integrations/community-nodes/installation/))
-2. **Cole suas chaves.** No painel do ZapZap ([app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node)) abra **Configurações > API** e copie a API Key e o API Secret. No n8n crie uma credencial **ZapZap API**, cole os dois e clique em **Test**. Deve aparecer "Conectado como ..." com o número de instâncias.
-3. **Envie a primeira mensagem.** Adicione o nó **ZapZap**, deixe Recurso = Mensagem e Operação = Send Text, escolha a instância na lista (aparece o nome e se está conectada), digite número e texto e execute.
+2. **Cole suas chaves.** No painel do ZapZap ([app.zapzapapi.com](https://app.zapzapapi.com/?utm_source=n8n&utm_medium=community&utm_campaign=node)) abra **Configurações > API** e copie a API Key e o API Secret. No n8n crie uma credencial **ZapZap API**, cole os dois e salve (o n8n testa a credencial ao salvar). Deve aparecer uma mensagem verde de sucesso; se aparecer vermelha, veja Problemas comuns abaixo. A credencial fica em inglês no n8n (API Key, API Secret...), o resto do nó aparece em português.
+3. **Envie a primeira mensagem.** Adicione o nó **ZapZap**, deixe Recurso = Mensagem e Operação = Enviar mensagem de texto, escolha a instância na lista (aparece o nome e se está conectada; "instância" é o número de WhatsApp conectado no ZapZap, e se a lista estiver vazia crie e conecte um em app.zapzapapi.com), digite número e texto e execute.
 
 Quer um fluxo pronto? Importe qualquer arquivo de [`templates/`](templates/README.pt-BR.md).
 
@@ -27,12 +27,12 @@ As chaves ficam no cofre de credenciais do n8n e vão somente nos cabeçalhos `x
 
 | Recurso | Operações |
 |---|---|
-| Message | Send Text, Send Media (URL ou arquivo binário), Send Interactive (enquete, botões, lista), Send Location, Send Contact, React |
-| Group | Get Many, Get, Create |
-| Chat | Mark as Read |
-| Instance | Create, Get, Get Many, Get Status, Get QR Code (também devolvido como imagem) |
-| Account | Get |
-| Custom API Call | Qualquer outro endpoint da [referência da API](https://zapzapapi.com/docs), já autenticado |
+| Mensagem | Enviar mensagem de texto, Enviar imagem, vídeo, áudio ou documento (URL ou arquivo binário), Enviar botões, lista ou enquete, Enviar localização, Enviar contato, Reagir |
+| Grupo | Listar, Ver, Criar |
+| Conversa | Marcar como lida |
+| Instância | Criar, Ver, Listar, Ver status, Pegar QR code (também devolvido como imagem) |
+| Conta | Ver |
+| Chamada personalizada da API | Qualquer outro endpoint da [referência da API](https://zapzapapi.com/docs), já autenticado |
 
 Bom saber:
 
@@ -41,7 +41,7 @@ Bom saber:
 - **Texto** pode ter emoji e qualquer alfabeto (árabe, hebraico, chinês, japonês, coreano).
 - **Vários itens** de entrada geram vários resultados. Ligue **Continue On Fail** para receber um item de erro nos que falharem e seguir adiante.
 - **Limite de requisições**: resposta 429 é repetida até 3 vezes, esperando o tempo de `Retry-After`. Erros temporários 502/503/504 são repetidos só em consultas.
-- **Sem mensagem duplicada**: um envio nunca é repetido após timeout ou erro do servidor, porque a mensagem pode já ter saído. O nó para com uma mensagem clara para você decidir. (A API não tem chave de idempotência.)
+- **Sem mensagem duplicada**: um envio nunca é repetido após timeout ou erro do servidor, porque a mensagem pode já ter saído. O nó para com um aviso ("A mensagem pode já ter sido enviada. Confira a conversa antes de enviar de novo") para você decidir. (A API não tem chave de idempotência.)
 - **Redirecionamentos** nunca são seguidos, então suas chaves não vão para outro servidor.
 - Pode ser usado como **ferramenta de agente de IA** no n8n.
 - Criar instância é cobrado do saldo; veja os [preços](https://zapzapapi.com/precos?utm_source=n8n&utm_medium=community&utm_campaign=node) antes.
@@ -54,7 +54,7 @@ Bom saber:
 
 A saída traz campos fáceis no topo: `from`, `text`, `type`, `time`, `chatId`, `isGroup`, `fromMe`, `messageId`, `instanceName`, além do conteúdo completo (`data.message...`).
 
-- Toda entrega é assinada (`X-ZapZap-Signature`, HMAC-SHA256 com horário). O nó confere com comparação em tempo constante e recusa entregas falsas ou com mais de 5 minutos. Com **Set Webhook Manually**, cole o segredo em Options; sem ele não dá para verificar.
+- Toda entrega é assinada (`X-ZapZap-Signature`, HMAC-SHA256 com horário). O nó confere com comparação em tempo constante e recusa entregas falsas ou com mais de 5 minutos. Com **Set Webhook Manually**, cole o segredo em Options; sem ele, quem souber a URL poderia enviar eventos falsos. No modo automático o nó se recusa a ativar se o ZapZap não devolver o segredo.
 - Entregas repetidas (mesmo ID de entrega) são ignoradas. Ligue **Ignore My Own Messages** em respostas automáticas.
 - A resposta sai na hora; seu fluxo roda depois.
 - Enquanto usa "Listen for test event", o webhook da instância aponta para a URL de teste e volta ao normal quando você para.

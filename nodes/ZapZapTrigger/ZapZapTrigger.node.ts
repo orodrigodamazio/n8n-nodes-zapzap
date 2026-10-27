@@ -10,7 +10,7 @@ import type {
 	IWebhookResponseData,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { getBaseUrl, loadInstanceOptions, zapZapRequest } from '../shared/client';
+import { getBaseUrl, getLang, loadInstanceOptions, msg, zapZapRequest } from '../shared/client';
 
 export const SIGNATURE_TOLERANCE_SEC = 300;
 const MAX_SEEN = 500;
@@ -78,6 +78,7 @@ export class ZapZapTrigger implements INodeType {
 		name: 'zapZapTrigger',
 		icon: 'file:zapzap.svg',
 		group: ['trigger'],
+		usableAsTool: true,
 		version: 1,
 		subtitle: '=Events: {{$parameter["events"].length ? $parameter["events"].join(", ") : "main"}}',
 		description: 'Start a workflow when a WhatsApp message or event arrives on a ZapZap instance',
@@ -103,7 +104,7 @@ export class ZapZapTrigger implements INodeType {
 		properties: [
 			{
 				displayName:
-					'Pick the instance and activate the workflow. The webhook is registered on that instance automatically and removed when you deactivate it. n8n needs a public HTTPS address. While you test with "Listen for test event", the instance webhook points to the test URL and is restored when you stop.',
+					'1. Pick the instance. 2. Activate the workflow: the webhook is registered on that instance automatically and removed when you deactivate it. 3. Send a test message to that number. n8n needs a public HTTPS address. While you test with "Listen for test event", the instance webhook points to the test URL and is restored when you stop.',
 				name: 'notice',
 				type: 'notice',
 				default: '',
@@ -116,7 +117,7 @@ export class ZapZapTrigger implements INodeType {
 				default: '',
 				typeOptions: { loadOptionsMethod: 'getInstances' },
 				description:
-					'WhatsApp instance to listen to. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					'The connected WhatsApp number to listen to (called an instance). If the list is empty, create and connect one in app.zapzapapi.com first. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 				displayOptions: { show: { manualSetup: [false] } },
 			},
 			{
@@ -173,7 +174,7 @@ export class ZapZapTrigger implements INodeType {
 						typeOptions: { password: true },
 						default: '',
 						description:
-							'Only for "Set Webhook Manually". Paste the secret shown in the ZapZap webhook settings so signatures are checked. With automatic setup this is handled for you.',
+							'Only for "Set Webhook Manually". Paste the secret shown in the ZapZap webhook settings so signatures are checked. Without it, fake events are accepted. With automatic setup this is handled for you.',
 					},
 				],
 			},
@@ -183,7 +184,7 @@ export class ZapZapTrigger implements INodeType {
 				type: 'boolean',
 				default: false,
 				description:
-					'Whether to skip auto-registration and point the instance webhook yourself, in the ZapZap panel. Without a secret, incoming calls are not verified.',
+					'Whether to skip auto-registration and point the instance webhook yourself, in the ZapZap panel. Paste the secret in Options > Webhook Secret. Without it, anyone who knows the webhook URL can send fake events.',
 			},
 		],
 	};
@@ -211,8 +212,13 @@ export class ZapZapTrigger implements INodeType {
 					});
 					if (current?.webhook_url === webhookUrl) {
 						const data = this.getWorkflowStaticData('node');
-						if (typeof current.webhook_secret === 'string') data.webhookSecret = current.webhook_secret;
-						return true;
+						if (typeof current.webhook_secret === 'string' && current.webhook_secret) {
+							data.webhookSecret = current.webhook_secret;
+							return true;
+						}
+						// Registered but no secret to verify with: let create() decide (it fails closed).
+						const own = (this.getNodeParameter('options', {}) as IDataObject).webhookSecret;
+						return Boolean(data.webhookSecret || own);
 					}
 				} catch {
 					// Lookup failed: let create() try, it raises a clear error if it still fails.
@@ -246,7 +252,25 @@ export class ZapZapTrigger implements INodeType {
 					body: { webhook_url: webhookUrl, enabled: true, events },
 				});
 				const data = this.getWorkflowStaticData('node');
-				if (res && typeof res.webhook_secret === 'string') data.webhookSecret = res.webhook_secret;
+				if (res && typeof res.webhook_secret === 'string' && res.webhook_secret) {
+					data.webhookSecret = res.webhook_secret;
+					return true;
+				}
+				// No secret came back. Unless the user pasted one, events could not be verified: fail closed
+				// and undo the registration so the instance does not keep posting to an open URL.
+				const own = (this.getNodeParameter('options', {}) as IDataObject).webhookSecret;
+				if (!own) {
+					try {
+						await zapZapRequest(this, {
+							method: 'PUT',
+							path: `/instances/${encodeURIComponent(instanceId)}/webhook`,
+							body: { webhook_url: '' },
+						});
+					} catch {
+						// Best effort.
+					}
+					throw new NodeOperationError(this.getNode(), msg(await getLang(this), 'noSecret'));
+				}
 				return true;
 			},
 
@@ -288,11 +312,11 @@ export class ZapZapTrigger implements INodeType {
 			const header = String(req.headers['x-zapzap-signature'] ?? '');
 			const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
 			if (!header) return reject(401, 'missing signature');
-			if (raw) {
-				const verdict = verifySignature(secret, raw, header);
-				if (verdict === 'bad') return reject(401, 'invalid signature');
-				if (verdict === 'stale') return reject(401, 'signature too old');
-			}
+			// Fail closed: without the raw bytes the signature cannot be checked, so nothing is accepted.
+			if (!raw) return reject(401, 'missing raw body');
+			const verdict = verifySignature(secret, raw, header);
+			if (verdict === 'bad') return reject(401, 'invalid signature');
+			if (verdict === 'stale') return reject(401, 'signature too old');
 		}
 
 		const body = this.getBodyData() as IDataObject;

@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "Listens to connection events and warns an admin number on WhatsApp (use a different, connected instance for the alert).\nSet both Instance IDs and the admin number.",
+        "content": "Listens to connection events and warns an admin number on WhatsApp (use a different, connected instance for the alert).\nPick your instance: in the Trigger, the instance to watch; in the alert node, a different connected instance that sends the warning. Then set the admin number.",
         "width": 420,
         "height": 200
       },
@@ -18,7 +18,7 @@
     },
     {
       "parameters": {
-        "instanceId": "YOUR_INSTANCE_ID",
+        "instanceId": "",
         "events": [
           "connection"
         ]
@@ -75,7 +75,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendText",
-        "instanceId": "YOUR_ALERT_INSTANCE_ID",
+        "instanceId": "",
         "number": "5511999990001",
         "text": "=Instance {{ $json.instance_name }} disconnected. Open app.zapzapapi.com to reconnect it."
       },

@@ -40,7 +40,7 @@
       "parameters": {
         "resource": "message",
         "operation": "sendText",
-        "instanceId": "YOUR_INSTANCE_ID",
+        "instanceId": "",
         "number": "5511999990001",
         "text": "Reminder: check today's schedule."
       },

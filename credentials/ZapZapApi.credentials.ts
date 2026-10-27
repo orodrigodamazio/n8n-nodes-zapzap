@@ -1,5 +1,6 @@
-import {
+import type {
 	IAuthenticateGeneric,
+	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -9,6 +10,8 @@ export class ZapZapApi implements ICredentialType {
 	name = 'zapZapApi';
 
 	displayName = 'ZapZap API';
+
+	icon = 'file:zapzap.svg' as const;
 
 	documentationUrl = 'https://zapzapapi.com/docs';
 
@@ -71,6 +74,18 @@ export class ZapZapApi implements ICredentialType {
 				// Node name and version, for support and usage statistics. Nothing else is sent.
 				...clientHeaders(),
 			},
+		},
+	};
+
+	// Runs when the credential is saved. The keys are added by `authenticate` above.
+	// Redirects are never followed, so the keys cannot travel to another host.
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL: '={{$credentials.baseUrl}}',
+			url: '/account',
+			method: 'GET',
+			disableFollowRedirect: true,
+			timeout: 20000,
 		},
 	};
 }
